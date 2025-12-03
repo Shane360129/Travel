@@ -496,13 +496,13 @@
             const [newItem, setNewItem] = useState({ time: '', title: '', location: '', note: '' });
             
             const daysData = [
-                { day: 1, date: '1/18', week: '(六)' },
-                { day: 2, date: '1/19', week: '(日)' },
-                { day: 3, date: '1/20', week: '(一)' },
-                { day: 4, date: '1/21', week: '(二)' },
-                { day: 5, date: '1/22', week: '(三)' },
-                { day: 6, date: '1/23', week: '(四)' },
-                { day: 7, date: '1/24', week: '(五)' },
+                { day: 1, date: '1/18', week: '(日)' },
+                { day: 2, date: '1/19', week: '(一)' },
+                { day: 3, date: '1/20', week: '(二)' },
+                { day: 4, date: '1/21', week: '(三)' },
+                { day: 5, date: '1/22', week: '(四)' },
+                { day: 6, date: '1/23', week: '(五)' },
+                { day: 7, date: '1/24', week: '(六)' },
             ];
 
             const filteredItems = items.filter(i => i.day === selectedDay).sort((a, b) => a.time.localeCompare(b.time));
