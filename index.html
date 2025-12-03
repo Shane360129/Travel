@@ -271,19 +271,27 @@
 
     <script type="text/babel">
         const { useState, useEffect, useMemo, useRef } = React;
+// Import the functions you need from the SDKs you need
+import { initializeApp } from "firebase/app";
+import { getAnalytics } from "firebase/analytics";
+// TODO: Add SDKs for Firebase products that you want to use
+// https://firebase.google.com/docs/web/setup#available-libraries
 
-        // ==========================================
-        // ⚠️⚠️⚠️  Firebase 設定區 (請替換成您的)  ⚠️⚠️⚠️
-        // ==========================================
-     const firebaseConfig = {
-    apiKey: "AIzaSyAxyW9-sZckVhwIwp1bGlM-ud5GwaSQgHk",
-    authDomain: "travel-a5e1c.firebaseapp.com",
-    projectId: "travel-a5e1c",
-    storageBucket: "travel-a5e1c.firebasestorage.app",
-    messagingSenderId: "526434755984",
-    appId: "1:526434755984:web:121baa100419343c787f15",
-    measurementId: "G-5QM3KJ321X"
-  };
+// Your web app's Firebase configuration
+// For Firebase JS SDK v7.20.0 and later, measurementId is optional
+const firebaseConfig = {
+  apiKey: "AIzaSyAxyW9-sZckVhwIwp1bGlM-ud5GwaSQgHk",
+  authDomain: "travel-a5e1c.firebaseapp.com",
+  projectId: "travel-a5e1c",
+  storageBucket: "travel-a5e1c.firebasestorage.app",
+  messagingSenderId: "526434755984",
+  appId: "1:526434755984:web:121baa100419343c787f15",
+  measurementId: "G-5QM3KJ321X"
+};
+
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
+const analytics = getAnalytics(app);
 
         // 初始化 Firebase (防止重複初始化)
         if (firebaseConfig.projectId && !firebase.apps.length) {
