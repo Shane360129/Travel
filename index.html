@@ -15,10 +15,10 @@
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     
-    <!-- Lucide Icons (圖標庫) -->
+    <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
 
-    <!-- Google Fonts: Zen Maru Gothic (圓體) & Noto Sans TC -->
+    <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&family=Zen+Maru+Gothic:wght@400;500;700&display=swap" rel="stylesheet">
 
     <style>
@@ -37,36 +37,39 @@
             background-color: var(--jp-bg);
             color: var(--jp-text);
             -webkit-tap-highlight-color: transparent;
-            overscroll-behavior-y: none;
-            overflow: hidden;
-            /* 和紙質感噪點 */
+            margin: 0;
+            padding: 0;
             background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.04'/%3E%3C/svg%3E");
         }
 
         #root {
-            height: 100vh;
-            height: 100dvh;
+            height: 100dvh; 
             width: 100%;
             display: flex;
             flex-direction: column;
-            position: relative;
-            z-index: 1;
+            overflow: hidden;
         }
 
-        /* 隱藏滾動條但保留功能 */
+        .scroll-container {
+            flex: 1;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+            padding-bottom: calc(90px + var(--safe-bottom));
+            position: relative;
+            z-index: 10;
+        }
+
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
-        /* 底部導航欄玻璃擬態 */
         .tab-bar-glass {
-            background: rgba(255, 255, 255, 0.85);
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
             border-top: 1px solid rgba(255, 255, 255, 0.5);
-            box-shadow: 0 -4px 20px rgba(0,0,0,0.02);
+            box-shadow: 0 -4px 20px rgba(0,0,0,0.03);
         }
 
-        /* 便條紙風格備註 */
         .sticky-note {
             background-color: #FFFDF0;
             border-left: 3px solid var(--jp-yellow);
@@ -80,7 +83,6 @@
             line-height: 1.6;
         }
         
-        /* 飄雪/櫻花動畫 */
         .particle {
             position: absolute;
             top: -10px;
@@ -94,50 +96,43 @@
             100% { transform: translateY(110vh) translateX(20px) rotate(360deg); opacity: 0; }
         }
 
-        /* 頁面進場動畫 */
-        .animate-fade-in {
-            animation: fadeIn 0.4s ease-out forwards;
-        }
-        @keyframes fadeIn {
-            from { opacity: 0; transform: scale(0.99); }
-            to { opacity: 1; transform: scale(1); }
-        }
+        .animate-fade-in { animation: fadeIn 0.4s ease-out forwards; }
+        @keyframes fadeIn { from { opacity: 0; transform: scale(0.99); } to { opacity: 1; transform: scale(1); } }
 
-        /* 列表依序滑入 */
-        .stagger-item {
-            opacity: 0;
-            animation: slideUp 0.5s ease-out forwards;
-        }
-        @keyframes slideUp {
-            from { opacity: 0; transform: translateY(15px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
+        .stagger-item { opacity: 0; animation: slideUp 0.5s ease-out forwards; }
+        @keyframes slideUp { from { opacity: 0; transform: translateY(15px); } to { opacity: 1; transform: translateY(0); } }
 
-        /* 日系漸層文字 */
-        .text-gold {
-            color: #C18A26;
+        .text-gold { color: #C18A26; }
+        
+        @keyframes modalUp {
+            from { transform: translateY(100%); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
         }
+        .animate-modal { animation: modalUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+
+        .input-underline {
+            background: transparent;
+            border-bottom: 1px solid rgba(255,255,255,0.3);
+            color: white;
+            padding: 8px;
+            width: 100%;
+            outline: none;
+            transition: border-color 0.3s;
+        }
+        .input-underline:focus { border-bottom-color: white; }
+        
+        .input-light {
+            background: transparent;
+            border-bottom: 1px solid #E5E7EB;
+            padding: 12px 0;
+            width: 100%;
+            outline: none;
+            font-size: 1rem;
+            color: var(--jp-text);
+            transition: border-color 0.3s;
+        }
+        .input-light:focus { border-bottom-color: var(--jp-green); }
     </style>
-    
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    colors: {
-                        'jp-ink': '#4A4A4A',
-                        'jp-green': '#6A8D73',
-                        'jp-red': '#D67D7D',
-                        'jp-yellow': '#E8B664',
-                        'jp-blue': '#7CA0B8',
-                        'jp-gray': '#9CA3AF',
-                    },
-                    padding: {
-                        'safe-bottom': 'env(safe-area-inset-bottom)',
-                    }
-                }
-            }
-        }
-    </script>
 </head>
 <body>
     <div id="root"></div>
@@ -145,24 +140,12 @@
     <script type="text/babel">
         const { useState, useEffect, useMemo, useRef } = React;
 
-        // --- 修復版 Icon 元件 ---
-        const Icon = ({ name, size = 20, className, color = "currentColor" }) => {
+        // --- Icon ---
+        const Icon = ({ name, size = 20, className, color = "currentColor", strokeWidth = 2 }) => {
             const iconData = lucide.icons[name];
             if (!iconData) return null;
-            
             return (
-                <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    width={size}
-                    height={size}
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke={color}
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    className={className}
-                >
+                <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" className={className}>
                     {iconData.map((child, index) => {
                         const [tag, attrs] = child;
                         return React.createElement(tag, { ...attrs, key: index });
@@ -171,7 +154,7 @@
             );
         };
 
-        // --- Custom Hook: LocalStorage ---
+        // --- Hook ---
         const useStickyState = (defaultValue, key) => {
             const [value, setValue] = useState(() => {
                 const stickyValue = window.localStorage.getItem(key);
@@ -183,49 +166,43 @@
             return [value, setValue];
         };
 
-        // --- 行程資料 ---
+        // --- Data ---
         const defaultItinerary = [
-            // D1: 1/18 秋葉原
-            { id: 101, day: 1, time: '13:05', title: '抵達東京', location: '成田機場', note: '✈️ CI0126。出關後搭 Skyliner 直奔上野/秋葉原。' },
-            { id: 102, day: 1, time: '16:00', title: 'Check-in', location: '東京秋叶原嘉陽ビル', note: '🏨 放行李。位於秋葉原核心區，逛街超方便。' },
-            { id: 103, day: 1, time: '17:00', title: '秋葉原電器街', location: '秋葉原', note: '💡 2025 推薦：\n1. TAMASHII NATIONS STORE (新公仔)\n2. Yodobashi Camera (8F 餐廳街開很晚)\n3. GiGO 夾娃娃機' },
-            { id: 104, day: 1, time: '19:30', title: '晚餐：鳥貴族', location: '鳥貴族 (秋葉原店)', note: '🍢 均一價燒鳥居酒屋，平板點餐(有中文)。必點：貴族燒、釜飯。' },
-            { id: 105, day: 1, time: '21:00', title: '續攤/散步', location: '東大和町周邊', note: '🍺 感受東京夜生活，或逛逛還開著的唐吉訶德。' },
-
-            // D2: 1/19 川越+新宿
-            { id: 201, day: 2, time: '08:00', title: '出發前往川越', location: '池袋站', note: '🚆 轉乘東武東上線 (約30分)。建議買「川越特急券」。' },
-            { id: 202, day: 2, time: '10:00', title: '川越 (小江戶)', location: '川越一番街', note: '⛩️ 必逛：\n1. 冰川神社 (釣鯛魚籤)\n2. 時之鐘 (星巴克)\n3. 菓子屋橫丁 (懷舊零食)' },
-            { id: 203, day: 2, time: '17:30', title: '移動至新宿', location: '新宿', note: '🏙️ 傍晚的新宿霓虹燈最美。可去歌舞伎町 Tower 拍照。' },
-            { id: 204, day: 2, time: '18:00', title: '晚餐：新宿のけむり', location: '新宿のけむり', note: '🔥 人氣居酒屋，氣氛熱鬧，適合小酌。' },
-
-            // D3: 1/20 築地/秋/淺/銀
-            { id: 301, day: 3, time: '08:00', title: '築地市場', location: '築地場外', note: '🍣 早餐！推薦：狐狸屋牛丼(排隊名店)、丸武玉子燒、生鮮海膽。' },
-            { id: 302, day: 3, time: '11:00', title: '秋葉原', location: '秋葉原', note: '🎮 白天的秋葉原，補齊昨天沒逛到的店。Mandarake 尋寶。' },
-            { id: 303, day: 3, time: '14:00', title: '淺草寺', location: '淺草雷門', note: '🏮 參拜觀音。仲見世通吃「淺草炸肉餅」、「花月堂菠蘿麵包」。' },
-            { id: 304, day: 3, time: '17:00', title: '銀座逛街', location: '銀座', note: '🛍️ 推薦：\n1. Uniqlo 銀座旗艦店 (12層樓)\n2. Itoya 伊東屋 (文具控天堂)\n3. 銀座 Six (蔦屋書店)' },
-
-            // D4: 1/21 明治/表參/澀谷
-            { id: 401, day: 4, time: '09:30', title: '明治神宮', location: '原宿站', note: '🌲 巨大的鳥居與森林，享受都市芬多精。' },
-            { id: 402, day: 4, time: '11:30', title: '表參道', location: '表參道 Hills', note: '☕ 時尚街拍。推薦：Ralph\'s Coffee 或 Apple Store 朝聖。' },
-            { id: 403, day: 4, time: '14:00', title: '澀谷', location: '澀谷 Scramble', note: '🐕 忠犬八公、SHIBUYA SKY (需預約)、Parco (任天堂/寶可夢中心)。' },
-
-            // D5: 1/22 KLOOK 東北2日遊 Day 1
-            { id: 501, day: 5, time: '06:50', title: '集合出發', location: '東京巨蛋丸之內ヒロ', note: '🚌 KLOOK 團體行程，請務必準時！準備長途車程。' },
-            { id: 502, day: 5, time: '14:00', title: '銀山溫泉', location: '銀山溫泉', note: '♨️ 大正浪漫絕景！自由活動 90 分鐘。\n📸 必拍：能登屋旅館、紅橋。\n⚠️ 提醒：下午4點多不可能回到銀座，這裡應指抵達東北的住宿點。' },
-            { id: 503, day: 5, time: '16:30', title: '前往飯店', location: '山形縣/宮城縣', note: '🏨 根據行程說明入住溫泉飯店或市區飯店。' },
-            { id: 504, day: 5, time: '18:00', title: '晚餐', location: '飯店內/周邊', note: '🍱 享用當地會席料理或自助餐。' },
-
-            // D6: 1/23 KLOOK 東北2日遊 Day 2
-            { id: 601, day: 6, time: '07:00', title: '飯店早餐', location: '飯店', note: '🍳 吃飽飽，今天要去雪山，需要熱量！' },
-            { id: 602, day: 6, time: '10:00', title: '藏王樹冰', location: '藏王纜車', note: '❄️ 自由活動 2 小時。搭纜車看「雪怪」。山頂非常冷(-10度)，請全副武裝！' },
-            { id: 603, day: 6, time: '12:00', title: '藏王狐狸村', location: '宮城藏王狐狸村', note: '🦊 自由活動 1 小時。門票¥1500 (通常團費不含)。\n⚠️ 小心隨身掛飾被狐狸咬走。' },
-            { id: 604, day: 6, time: '13:00', title: '返程東京', location: '巴士車上', note: '🚌 漫長的返程，中間會停靠休息站，可買東北限定伴手禮 (毛豆奶昔、牛舌餅乾)。' },
-            { id: 605, day: 6, time: '21:00', title: '抵達東京', location: '新宿/東京站', note: '🗼 結束行程，自行回秋葉原飯店休息。' },
-
-            // D7: 1/24 返程
-            { id: 701, day: 7, time: '09:00', title: '最後整理', location: '東京秋叶原嘉陽ビル', note: '🧳 Check-out。檢查護照、錢包。' },
-            { id: 702, day: 7, time: '10:00', title: '前往機場', location: '京成上野站', note: '🚆 搭乘 Skyliner (約45分)。建議 11:20 前抵達機場。' },
-            { id: 703, day: 7, time: '13:20', title: '飛機起飛', location: '成田機場 T2', note: '✈️ CI0103 回高雄。平安順利！' }
+            // D1
+            { id: 101, day: 1, time: '13:05', title: '高雄起飛 (CI0126)', location: '高雄國際機場', note: '✈️ 預計 17:30 抵達成田。出關後搭 Skyliner 直奔上野/秋葉原。' },
+            { id: 102, day: 1, time: '19:30', title: 'Check-in', location: '東京秋叶原嘉陽ビル', note: '🏨 放行李。位於秋葉原核心區。' },
+            { id: 103, day: 1, time: '20:00', title: '秋葉原電器街', location: '秋葉原', note: '💡 2025 推薦：Yodobashi Camera (餐廳街開很晚)、Radio Kaikan。' },
+            { id: 104, day: 1, time: '21:00', title: '晚餐：鳥貴族', location: '鳥貴族 (秋葉原店)', note: '🍢 均一價燒鳥居酒屋。' },
+            { id: 105, day: 1, time: '22:30', title: '續攤/散步', location: '東大和町周邊', note: '🍺 感受夜生活。' },
+            // D2
+            { id: 201, day: 2, time: '08:00', title: '出發前往川越', location: '池袋站', note: '🚆 轉乘東武東上線 (約30分)。' },
+            { id: 202, day: 2, time: '10:00', title: '川越 (小江戶)', location: '川越一番街', note: '⛩️ 必逛：冰川神社、時之鐘、菓子屋橫丁。' },
+            { id: 203, day: 2, time: '17:30', title: '移動至新宿', location: '新宿', note: '🏙️ 傍晚的新宿霓虹燈最美。' },
+            { id: 204, day: 2, time: '18:00', title: '晚餐：新宿のけむり', location: '新宿のけむり', note: '🔥 人氣居酒屋，氣氛熱鬧。' },
+            // D3
+            { id: 301, day: 3, time: '09:00', title: '築地市場', location: '築地場外', note: '🍣 推薦：狐狸屋牛丼、玉子燒。' },
+            { id: 302, day: 3, time: '11:30', title: '秋葉原', location: '秋葉原', note: '🎮 白天的秋葉原，Mandarake 尋寶。' },
+            { id: 303, day: 3, time: '14:30', title: '淺草寺', location: '淺草雷門', note: '🏮 仲見世通吃「淺草炸肉餅」。' },
+            { id: 304, day: 3, time: '17:00', title: '銀座逛街', location: '銀座', note: '🛍️ Uniqlo 旗艦店、Itoya 伊東屋。' },
+            // D4
+            { id: 401, day: 4, time: '09:30', title: '明治神宮', location: '原宿站', note: '🌲 享受都市芬多精。' },
+            { id: 402, day: 4, time: '11:30', title: '表參道', location: '表參道 Hills', note: '☕ 時尚街拍。' },
+            { id: 403, day: 4, time: '14:00', title: '澀谷', location: '澀谷 Scramble', note: '🐕 忠犬八公、SHIBUYA SKY、Parco。' },
+            // D5
+            { id: 501, day: 5, time: '06:50', title: '集合出發', location: '東京巨蛋丸之內ヒロ', note: '🚌 KLOOK 團體行程，請準時！' },
+            { id: 502, day: 5, time: '14:00', title: '銀山溫泉', location: '銀山溫泉', note: '♨️ 大正浪漫絕景！自由活動 90 分鐘。' },
+            { id: 503, day: 5, time: '16:30', title: '前往飯店', location: '山形縣/宮城縣', note: '🏨 根據行程說明入住。' },
+            { id: 504, day: 5, time: '18:00', title: '晚餐', location: '飯店內', note: '🍱 享用當地料理。' },
+            // D6
+            { id: 601, day: 6, time: '07:00', title: '飯店早餐', location: '飯店', note: '🍳 吃飽飽，準備去雪山。' },
+            { id: 602, day: 6, time: '10:00', title: '藏王樹冰', location: '藏王纜車', note: '❄️ 自由活動 2 小時。山頂極冷(-10度)！' },
+            { id: 603, day: 6, time: '12:00', title: '藏王狐狸村', location: '宮城藏王狐狸村', note: '🦊 自由活動 1 小時。門票¥1500。' },
+            { id: 604, day: 6, time: '13:00', title: '返程東京', location: '巴士車上', note: '🚌 返回東京，預計21:00抵達。' },
+            { id: 605, day: 6, time: '21:00', title: '抵達東京', location: '新宿/東京站', note: '🗼 自行回秋葉原飯店休息。' },
+            // D7
+            { id: 701, day: 7, time: '09:00', title: '最後整理', location: '東京秋叶原嘉陽ビル', note: '🧳 Check-out。' },
+            { id: 702, day: 7, time: '10:00', title: '前往機場', location: '京成上野站', note: '🚆 搭乘 Skyliner。' },
+            { id: 703, day: 7, time: '13:20', title: '成田起飛 (CI0103)', location: '成田機場 T2', note: '✈️ 回高雄。平安順利！' }
         ];
 
         const defaultExpenses = [
@@ -236,32 +213,19 @@
         
         const defaultUsers = ['我', '旅伴A', '旅伴B'];
 
-        // --- 元件：粒子背景 (雪/花) ---
+        // --- Components ---
+
         const ParticleBackground = ({ type }) => {
             const count = type === 'snow' ? 30 : 15;
             const color = type === 'snow' ? '#FFF' : '#FFD7E0';
-            
             const particles = useMemo(() => Array.from({ length: count }).map((_, i) => ({
-                id: i,
-                left: Math.random() * 100,
-                delay: Math.random() * 5,
-                duration: Math.random() * 5 + 5,
-                size: Math.random() * 8 + 5,
+                id: i, left: Math.random() * 100, delay: Math.random() * 5, duration: Math.random() * 5 + 5, size: Math.random() * 8 + 5,
             })), [type]);
 
             return (
-                <div className="fixed inset-0 pointer-events-none overflow-hidden z-0" 
-                     style={{ background: type === 'snow' ? 'linear-gradient(to bottom, #8BA3C7, #EBF4FA)' : 'transparent' }}>
+                <div className="fixed inset-0 pointer-events-none overflow-hidden z-0" style={{ background: type === 'snow' ? 'linear-gradient(to bottom, #8BA3C7, #EBF4FA)' : 'transparent' }}>
                     {particles.map(p => (
-                        <div key={p.id} className="particle"
-                            style={{
-                                left: `${p.left}%`,
-                                fontSize: `${p.size}px`,
-                                color: color,
-                                animationDuration: `${p.duration}s`,
-                                animationDelay: `${p.delay}s`,
-                                opacity: type === 'snow' ? 0.7 : 0.4
-                            }}>
+                        <div key={p.id} className="particle" style={{ left: `${p.left}%`, fontSize: `${p.size}px`, color: color, animationDuration: `${p.duration}s`, animationDelay: `${p.delay}s`, opacity: type === 'snow' ? 0.7 : 0.4 }}>
                             {type === 'snow' ? '❄' : '🌸'}
                         </div>
                     ))}
@@ -269,156 +233,249 @@
             );
         };
 
-        // --- 元件：行程卡片 ---
-        const ItineraryCard = ({ item, isSnowDay, index }) => (
+        const ItineraryCard = ({ item, isSnowDay, index, onEdit, onDelete }) => (
             <div className={`relative pl-6 border-l-2 border-gray-200 last:border-0 mb-6 stagger-item`} style={{ animationDelay: `${index * 0.05}s` }}>
                 <div className={`absolute -left-[9px] top-0 w-4 h-4 rounded-full border-2 bg-white ${isSnowDay ? 'border-jp-blue' : 'border-jp-green'}`}></div>
-                
-                <div className="bg-white/80 backdrop-blur-md p-4 rounded-2xl shadow-sm active:scale-[0.98] transition-transform duration-200 border border-white/60">
-                    <div className="flex justify-between items-baseline mb-2">
-                        <span className={`font-bold font-mono text-xl ${isSnowDay ? 'text-jp-blue' : 'text-jp-green'}`}>{item.time}</span>
-                        <div className="text-xs text-gray-400">Day {item.day}</div>
+                <div className="bg-white/80 backdrop-blur-md p-4 rounded-2xl shadow-sm active:scale-[0.99] transition-transform duration-200 border border-white/60">
+                    <div className="flex justify-between items-start mb-2">
+                        <div>
+                            <span className={`font-bold font-mono text-xl ${isSnowDay ? 'text-jp-blue' : 'text-jp-green'}`}>{item.time}</span>
+                            <div className="text-xs text-gray-400">Day {item.day}</div>
+                        </div>
+                        <div className="flex gap-1">
+                            <button onClick={(e) => { e.stopPropagation(); onEdit(item); }} className="p-2 text-gray-300 hover:text-jp-green transition-colors active:scale-90"><Icon name="Edit2" size={16} /></button>
+                            <button onClick={(e) => { e.stopPropagation(); onDelete(item.id); }} className="p-2 text-gray-300 hover:text-jp-red transition-colors active:scale-90"><Icon name="Trash2" size={16} /></button>
+                        </div>
                     </div>
-                    
                     <h3 className="font-bold text-gray-700 text-lg mb-1">{item.title}</h3>
-                    
-                    {item.location && (
-                        <div className="flex items-center text-gray-500 text-sm mb-2" onClick={() => window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(item.location)}`, '_blank')}>
-                            <Icon name="MapPin" size={14} className="mr-1 text-jp-red" />
-                            {item.location}
-                        </div>
-                    )}
-
-                    {item.note && (
-                        <div className="sticky-note">
-                            {item.note.split('\n').map((line, i) => <div key={i}>{line}</div>)}
-                        </div>
-                    )}
+                    {item.location && <div className="flex items-center text-gray-500 text-sm mb-2" onClick={() => window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(item.location)}`, '_blank')}><Icon name="MapPin" size={14} className="mr-1 text-jp-red" />{item.location}</div>}
+                    {item.note && <div className="sticky-note">{item.note.split('\n').map((line, i) => <div key={i}>{line}</div>)}</div>}
                 </div>
             </div>
         );
 
-        // --- 視圖：行程表 ---
-        const ItineraryView = ({ items }) => {
+        const ItineraryView = ({ items, setItems }) => {
             const [selectedDay, setSelectedDay] = useState(1);
+            const [isAdding, setIsAdding] = useState(false);
+            const [editingItem, setEditingItem] = useState(null);
+            const [newItem, setNewItem] = useState({ time: '', title: '', location: '', note: '' });
+            
             const days = [1, 2, 3, 4, 5, 6, 7];
             const filteredItems = items.filter(i => i.day === selectedDay).sort((a, b) => a.time.localeCompare(b.time));
             const isSnowDay = selectedDay === 5 || selectedDay === 6;
 
+            const handleDelete = (id) => {
+                if (confirm("確定要刪除這個行程嗎？")) setItems(items.filter(i => i.id !== id));
+            };
+
+            const handleAdd = () => {
+                if (!newItem.title || !newItem.time) return;
+                setItems([...items, { ...newItem, id: Date.now(), day: selectedDay }]);
+                setIsAdding(false);
+                setNewItem({ time: '', title: '', location: '', note: '' });
+            };
+
+            const handleUpdate = () => {
+                if (!editingItem.title || !editingItem.time) return;
+                setItems(items.map(i => i.id === editingItem.id ? editingItem : i));
+                setEditingItem(null);
+            };
+
             return (
-                <div className="flex flex-col h-full relative animate-fade-in">
+                <div className="flex flex-col h-full relative animate-fade-in w-full">
                     <ParticleBackground type={isSnowDay ? 'snow' : 'sakura'} />
                     
-                    <div className="flex-1 overflow-y-auto no-scrollbar relative z-10 p-5 pb-24">
-                        <header className="mb-6 mt-2">
-                            <h1 className="text-3xl font-bold text-jp-ink tracking-widest drop-shadow-sm">
-                                {isSnowDay ? '東北雪見 ❄️' : '東京散策 🗼'}
-                            </h1>
-                            <p className="text-sm text-gray-500 mt-1 font-mono tracking-wide">
-                                2025.01.{17 + selectedDay} (Day {selectedDay})
-                            </p>
+                    <div className="scroll-container p-5">
+                        <header className="mb-6 mt-2 flex justify-between items-end">
+                            <div>
+                                <h1 className="text-3xl font-bold text-jp-ink tracking-widest drop-shadow-sm">{isSnowDay ? '東北雪見 ❄️' : '東京散策 🗼'}</h1>
+                                <p className="text-sm text-gray-500 mt-1 font-mono tracking-wide">Day {selectedDay} | 2025.01.{17 + selectedDay}</p>
+                            </div>
+                            <button onClick={() => setIsAdding(true)} className="bg-jp-green text-white p-3 rounded-full shadow-lg active:scale-90 transition-transform"><Icon name="Plus" size={24}/></button>
                         </header>
 
-                        {/* 天數選擇器 (Native Scroll Snap) */}
                         <div className="flex gap-3 mb-6 overflow-x-auto no-scrollbar pb-2 snap-x snap-mandatory">
                             {days.map(d => (
-                                <button
-                                    key={d}
-                                    onClick={() => setSelectedDay(d)}
-                                    className={`snap-center px-5 py-2 rounded-full whitespace-nowrap text-sm font-bold transition-all transform shadow-sm active:scale-95
-                                        ${selectedDay === d 
-                                            ? (d >= 5 && d <= 6 ? 'bg-jp-blue text-white' : 'bg-jp-green text-white') 
-                                            : 'bg-white/70 text-gray-500 hover:bg-white'}
-                                    `}
-                                >
-                                    Day {d}
-                                </button>
+                                <button key={d} onClick={() => setSelectedDay(d)} className={`snap-center px-5 py-2 rounded-full whitespace-nowrap text-sm font-bold transition-all transform shadow-sm active:scale-95 ${selectedDay === d ? (d >= 5 && d <= 6 ? 'bg-jp-blue text-white' : 'bg-jp-green text-white') : 'bg-white/70 text-gray-500 hover:bg-white'}`}>Day {d}</button>
                             ))}
                         </div>
 
-                        {/* 行程列表 */}
                         <div>
                             {filteredItems.map((item, idx) => (
-                                <ItineraryCard key={item.id} item={item} isSnowDay={isSnowDay} index={idx} />
+                                <ItineraryCard key={item.id} item={item} isSnowDay={isSnowDay} index={idx} onEdit={setEditingItem} onDelete={handleDelete} />
                             ))}
                             {filteredItems.length === 0 && <div className="text-center text-gray-400 py-10">尚無行程</div>}
                         </div>
+                    </div>
+
+                    {/* Add Modal */}
+                    {isAdding && (
+                        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+                            <div className="bg-white w-full sm:w-80 rounded-t-2xl sm:rounded-2xl p-6 shadow-2xl animate-modal pb-safe-bottom">
+                                <h3 className="text-lg font-bold mb-4 text-jp-green">新增行程</h3>
+                                <div className="space-y-4">
+                                    {/* step="600" for 10 minutes interval */}
+                                    <input type="time" step="600" value={newItem.time} onChange={e => setNewItem({...newItem, time: e.target.value})} className="input-light" required />
+                                    <input type="text" placeholder="標題" value={newItem.title} onChange={e => setNewItem({...newItem, title: e.target.value})} className="input-light" />
+                                    <input type="text" placeholder="地點" value={newItem.location} onChange={e => setNewItem({...newItem, location: e.target.value})} className="input-light" />
+                                    <textarea placeholder="備註" value={newItem.note} onChange={e => setNewItem({...newItem, note: e.target.value})} className="input-light resize-none h-20"></textarea>
+                                </div>
+                                <div className="flex gap-3 mt-6">
+                                    <button onClick={() => setIsAdding(false)} className="flex-1 py-3 text-gray-400 font-bold bg-gray-100 rounded-xl">取消</button>
+                                    <button onClick={handleAdd} className="flex-1 py-3 bg-jp-green text-white font-bold rounded-xl shadow-md">儲存</button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Edit Modal */}
+                    {editingItem && (
+                        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+                            <div className="bg-white w-full sm:w-80 rounded-t-2xl sm:rounded-2xl p-6 shadow-2xl animate-modal pb-safe-bottom">
+                                <h3 className="text-lg font-bold mb-4 text-jp-green">編輯行程</h3>
+                                <div className="space-y-4">
+                                    {/* step="600" for 10 minutes interval */}
+                                    <input type="time" step="600" value={editingItem.time} onChange={e => setEditingItem({...editingItem, time: e.target.value})} className="input-light" required />
+                                    <input type="text" placeholder="標題" value={editingItem.title} onChange={e => setEditingItem({...editingItem, title: e.target.value})} className="input-light" />
+                                    <input type="text" placeholder="地點" value={editingItem.location} onChange={e => setEditingItem({...editingItem, location: e.target.value})} className="input-light" />
+                                    <textarea placeholder="備註" value={editingItem.note} onChange={e => setEditingItem({...editingItem, note: e.target.value})} className="input-light resize-none h-20"></textarea>
+                                </div>
+                                <div className="flex gap-3 mt-6">
+                                    <button onClick={() => setEditingItem(null)} className="flex-1 py-3 text-gray-400 font-bold bg-gray-100 rounded-xl">取消</button>
+                                    <button onClick={handleUpdate} className="flex-1 py-3 bg-jp-green text-white font-bold rounded-xl shadow-md">更新</button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        const ExpenseView = ({ expenses, setExpenses, users, setUsers }) => {
+            const [newExp, setNewExp] = useState({ title: '', amount: '', payer: '' });
+            const [isAddingUser, setIsAddingUser] = useState(false);
+            const [newUserName, setNewUserName] = useState('');
+
+            useEffect(() => {
+                if (users.length > 0 && !newExp.payer) {
+                    setNewExp(prev => ({ ...prev, payer: users[0] }));
+                }
+            }, [users]);
+
+            const handleAddUser = () => {
+                if (newUserName.trim() && !users.includes(newUserName.trim())) {
+                    setUsers([...users, newUserName.trim()]);
+                    setNewUserName('');
+                    setIsAddingUser(false);
+                }
+            };
+
+            const handleDeleteUser = (u) => {
+                if (users.length <= 1) { alert("至少保留一位成員"); return; }
+                if (confirm(`確定移除 ${u}？`)) setUsers(users.filter(user => user !== u));
+            };
+
+            const handleAddExpense = () => {
+                if (!newExp.title || !newExp.amount) return;
+                setExpenses([...expenses, { ...newExp, id: Date.now(), amount: parseFloat(newExp.amount) }]);
+                setNewExp({ title: '', amount: '', payer: users[0] || '' });
+            };
+
+            const handleDeleteExpense = (id) => {
+                if (confirm("確定刪除此筆支出？")) setExpenses(expenses.filter(e => e.id !== id));
+            };
+
+            return (
+                <div className="p-5 h-full relative z-10 animate-fade-in scroll-container">
+                    <h1 className="text-2xl font-bold text-jp-ink mb-6">旅費手帳 💰</h1>
+                    <ExchangeRateCard />
+
+                    {/* 成員管理 */}
+                    <div className="mb-6">
+                        <div className="flex justify-between items-center mb-2"><span className="text-xs text-gray-400 font-bold uppercase tracking-wider">成員名單</span></div>
+                        <div className="flex flex-wrap gap-2 items-center">
+                            {users.map(u => (
+                                <div key={u} className="bg-white px-3 py-1.5 rounded-full text-sm text-gray-600 border border-gray-200 shadow-sm flex items-center group">
+                                    <Icon name="User" size={12} className="mr-1.5 opacity-50"/>{u}
+                                    <button onClick={() => handleDeleteUser(u)} className="ml-1 text-gray-300 hover:text-jp-red"><Icon name="X" size={12}/></button>
+                                </div>
+                            ))}
+                            {isAddingUser ? (
+                                <div className="flex items-center bg-white px-2 py-1 rounded-full border border-jp-yellow shadow-sm">
+                                    <input type="text" value={newUserName} onChange={(e) => setNewUserName(e.target.value)} className="bg-transparent outline-none text-sm w-20 text-gray-700" placeholder="名字" autoFocus onKeyDown={(e) => e.key === 'Enter' && handleAddUser()} />
+                                    <button onClick={handleAddUser} className="text-jp-yellow ml-1"><Icon name="Check" size={14}/></button>
+                                    <button onClick={() => setIsAddingUser(false)} className="text-gray-400 ml-1"><Icon name="X" size={14}/></button>
+                                </div>
+                            ) : (
+                                <button onClick={() => setIsAddingUser(true)} className="px-3 py-1.5 rounded-full text-sm bg-white border border-dashed border-gray-300 text-gray-500 hover:border-jp-yellow hover:text-jp-yellow transition-all flex items-center"><Icon name="Plus" size={14} className="mr-1"/></button>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* 新增支出區塊 */}
+                    <div className="bg-white/90 p-4 rounded-xl shadow-sm mb-6 border border-gray-100">
+                        <h3 className="text-sm font-bold text-gray-500 mb-3">記上一筆</h3>
+                        <div className="space-y-3">
+                            <input type="text" placeholder="項目 (例: 拉麵)" value={newExp.title} onChange={e => setNewExp({...newExp, title: e.target.value})} className="input-light" />
+                            <div className="flex gap-2">
+                                <input type="number" placeholder="金額 (JPY)" value={newExp.amount} onChange={e => setNewExp({...newExp, amount: e.target.value})} className="input-light flex-1" />
+                                <select value={newExp.payer} onChange={e => setNewExp({...newExp, payer: e.target.value})} className="bg-transparent border-b border-gray-300 outline-none text-sm w-24 text-gray-600">
+                                    {users.map(u => <option key={u} value={u}>{u}</option>)}
+                                </select>
+                            </div>
+                            <button onClick={handleAddExpense} className="w-full bg-jp-yellow text-white py-3 rounded-xl shadow-md active:scale-95 transition-transform mt-2 font-bold">新增紀錄</button>
+                        </div>
+                    </div>
+
+                    {/* 支出列表 */}
+                    <div className="space-y-4 pb-10">
+                        {expenses.slice().reverse().map((exp, idx) => (
+                            <div key={exp.id} className="bg-white/90 p-4 rounded-xl shadow-sm flex justify-between items-center border-l-4 border-jp-yellow stagger-item" style={{ animationDelay: `${idx * 0.05}s` }}>
+                                <div>
+                                    <div className="font-bold text-gray-800">{exp.title}</div>
+                                    <div className="text-xs text-gray-500 flex items-center mt-1"><Icon name="User" size={12} className="mr-1" /> {exp.payer} 先付</div>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                    <div className="font-mono font-bold text-lg text-gold">¥{exp.amount.toLocaleString()}</div>
+                                    <button onClick={() => handleDeleteExpense(exp.id)} className="text-gray-300 hover:text-jp-red"><Icon name="Trash2" size={16}/></button>
+                                </div>
+                            </div>
+                        ))}
                     </div>
                 </div>
             );
         };
 
-        // --- 視圖：分帳 (簡化) ---
-        const ExpenseView = ({ expenses, users }) => (
-            <div className="p-5 h-full relative z-10 animate-fade-in overflow-y-auto pb-24">
-                <h1 className="text-2xl font-bold text-jp-ink mb-6">旅費手帳 💰</h1>
-                
-                <div className="bg-gradient-to-r from-jp-yellow to-yellow-600 text-white p-5 rounded-2xl shadow-lg mb-6 relative overflow-hidden">
-                    <div className="absolute right-0 top-0 opacity-10 transform rotate-12 -mr-4 -mt-4">
-                        <Icon name="TrendingUp" size={100} color="white" />
-                    </div>
-                    <div className="text-sm opacity-90">預估匯率</div>
-                    <div className="text-3xl font-bold font-mono mt-1">0.223</div>
-                    <div className="mt-2 text-xs opacity-80">1000 円 ≈ 223 台幣</div>
-                </div>
-
-                <div className="space-y-4">
-                    {expenses.map((exp, idx) => (
-                        <div key={exp.id} className="bg-white/90 p-4 rounded-xl shadow-sm flex justify-between items-center border-l-4 border-jp-yellow stagger-item" style={{ animationDelay: `${idx * 0.05}s` }}>
-                            <div>
-                                <div className="font-bold text-gray-800">{exp.title}</div>
-                                <div className="text-xs text-gray-500 flex items-center mt-1">
-                                    <Icon name="User" size={12} className="mr-1" /> {exp.payer} 先付
-                                </div>
-                            </div>
-                            <div className="font-mono font-bold text-lg text-gold">¥{exp.amount.toLocaleString()}</div>
-                        </div>
-                    ))}
-                </div>
-            </div>
-        );
-
-        // --- 視圖：地圖 (簡化) ---
         const MapView = ({ items }) => (
-            <div className="p-5 h-full relative z-10 animate-fade-in overflow-y-auto pb-24">
+            <div className="p-5 h-full relative z-10 animate-fade-in scroll-container">
                 <h1 className="text-2xl font-bold text-jp-ink mb-6">景點地圖 🗺️</h1>
                 <div className="grid gap-3">
                     {items.filter(i => i.location).map((item, idx) => (
                         <div key={item.id} className="bg-white/80 backdrop-blur-md p-4 rounded-xl shadow-sm flex items-center gap-3 stagger-item active:scale-98 transition-transform"
                              style={{ animationDelay: `${idx * 0.05}s` }}
                              onClick={() => window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(item.location)}`, '_blank')}>
-                            <div className="bg-blue-100 p-2 rounded-full text-jp-blue">
-                                <Icon name="MapPin" size={18} />
-                            </div>
+                            <div className="bg-blue-100 p-2 rounded-full text-jp-blue"><Icon name="MapPin" size={18} /></div>
                             <div>
                                 <div className="text-sm font-bold text-gray-700">{item.location}</div>
                                 <div className="text-xs text-gray-400">Day {item.day}</div>
                             </div>
-                            <div className="ml-auto text-gray-300">
-                                <Icon name="ChevronRight" size={18} />
-                            </div>
+                            <div className="ml-auto text-gray-300"><Icon name="ChevronRight" size={18} /></div>
                         </div>
                     ))}
                 </div>
             </div>
         );
 
-        // --- 底部導航 ---
         const TabBar = ({ activeTab, setActiveTab }) => {
             const tabs = [
                 { id: 'itinerary', label: '行程', icon: 'Calendar', color: 'text-jp-green' },
                 { id: 'map', label: '地圖', icon: 'MapPin', color: 'text-jp-blue' },
                 { id: 'expenses', label: '分帳', icon: 'Wallet', color: 'text-jp-yellow' },
             ];
-
             return (
                 <div className="tab-bar-glass fixed bottom-0 left-0 right-0 pb-safe-bottom pt-3 px-8 flex justify-between z-50 rounded-t-2xl">
                     {tabs.map(tab => (
-                        <button 
-                            key={tab.id} 
-                            onClick={() => setActiveTab(tab.id)}
-                            className={`flex flex-col items-center w-16 transition-all duration-300 active:scale-90 ${activeTab === tab.id ? `${tab.color} -translate-y-1` : 'text-gray-400'}`}
-                        >
+                        <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`flex flex-col items-center w-16 transition-all duration-300 active:scale-90 ${activeTab === tab.id ? `${tab.color} -translate-y-1` : 'text-gray-400'}`}>
                             <Icon name={tab.icon} size={24} className={activeTab === tab.id ? "stroke-2" : "stroke-1"} />
                             <span className="text-[10px] mt-1 font-bold">{tab.label}</span>
                         </button>
@@ -427,19 +484,18 @@
             );
         };
 
-        // --- App Entry ---
         const App = () => {
             const [activeTab, setActiveTab] = useState('itinerary');
-            const [itineraryItems] = useStickyState(defaultItinerary, 'jp_trip_2025_v3');
-            const [expenses] = useStickyState(defaultExpenses, 'jp_trip_2025_expenses');
-            const [users] = useStickyState(defaultUsers, 'jp_trip_2025_users');
+            const [itineraryItems, setItineraryItems] = useStickyState(defaultItinerary, 'jp_trip_2025_v4');
+            const [expenses, setExpenses] = useStickyState(defaultExpenses, 'jp_trip_2025_expenses');
+            const [users, setUsers] = useStickyState(defaultUsers, 'jp_trip_2025_users');
 
             const renderContent = () => {
                 switch(activeTab) {
-                    case 'itinerary': return <ItineraryView items={itineraryItems} />;
-                    case 'expenses': return <ExpenseView expenses={expenses} users={users} />;
+                    case 'itinerary': return <ItineraryView items={itineraryItems} setItems={setItineraryItems} />;
+                    case 'expenses': return <ExpenseView expenses={expenses} setExpenses={setExpenses} users={users} setUsers={setUsers} />;
                     case 'map': return <MapView items={itineraryItems} />;
-                    default: return <ItineraryView items={itineraryItems} />;
+                    default: return <ItineraryView items={itineraryItems} setItems={setItineraryItems} />;
                 }
             };
 
