@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>2025 東京東北・雪見手帖 (Stable Storage Ver.)</title>
+    <title>2025 東京東北・雪見手帖 (Firebase Sync Ver.)</title>
     
     <!-- React & ReactDOM -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
@@ -17,6 +17,11 @@
     
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
+
+    <!-- Firebase SDK (Compat version for simple HTML usage) -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
 
     <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&family=Zen+Maru+Gothic:wght@500;700;900&display=swap" rel="stylesheet">
@@ -93,7 +98,6 @@
             line-height: 1.6;
         }
         
-        /* Stickers */
         .sticker {
             position: absolute;
             pointer-events: none;
@@ -114,7 +118,6 @@
             overflow: hidden;
         }
 
-        /* Improved Page Transitions */
         .page-enter {
             animation: pageSlideUp 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
         }
@@ -239,13 +242,27 @@
             padding-bottom: calc(24px + env(safe-area-inset-bottom));
         }
 
-        /* Toast Notification */
         .toast-enter {
             animation: toastSlideUp 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
         }
         @keyframes toastSlideUp {
             from { transform: translate(-50%, 100%); opacity: 0; }
             to { transform: translate(-50%, 0); opacity: 1; }
+        }
+        
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(5px);
+            z-index: 200;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
         }
     </style>
 </head>
@@ -254,6 +271,28 @@
 
     <script type="text/babel">
         const { useState, useEffect, useMemo, useRef } = React;
+
+        // ==========================================
+        // ⚠️⚠️⚠️  Firebase 設定區 (請替換成您的)  ⚠️⚠️⚠️
+        // ==========================================
+     const firebaseConfig = {
+    apiKey: "AIzaSyAxyW9-sZckVhwIwp1bGlM-ud5GwaSQgHk",
+    authDomain: "travel-a5e1c.firebaseapp.com",
+    projectId: "travel-a5e1c",
+    storageBucket: "travel-a5e1c.firebasestorage.app",
+    messagingSenderId: "526434755984",
+    appId: "1:526434755984:web:121baa100419343c787f15",
+    measurementId: "G-5QM3KJ321X"
+  };
+
+        // 初始化 Firebase (防止重複初始化)
+        if (firebaseConfig.projectId && !firebase.apps.length) {
+            firebase.initializeApp(firebaseConfig);
+        }
+        
+        // 取得 Firestore 實體
+        const db = firebaseConfig.projectId ? firebase.firestore() : null;
+        const TRIP_DOC_ID = "tokyo_trip_2025_shared"; // 所有旅伴共用的 ID
 
         // --- Icons ---
         const Icon = ({ name, size = 20, className, color = "currentColor", strokeWidth = 2.5 }) => {
@@ -269,171 +308,131 @@
             );
         };
 
-        // --- Persistence Hook (Fixed Key) ---
-        const useStickyState = (defaultValue, key) => {
-            const [value, setValue] = useState(() => {
+        // --- Default Data (Fallback) ---
+        const defaultItinerary = [
+            { id: 101, day: 1, time: '13:05', title: '高雄起飛 (CI0126)', location: '高雄國際機場', note: '✈️ 預計 17:30 抵達成田。' },
+            { id: 102, day: 1, time: '19:30', title: 'Check-in', location: '東京秋叶原嘉陽ビル', note: '🏨 放行李。' },
+        ];
+        const defaultExpenses = [];
+        const defaultUsers = ['我', '旅伴A', '旅伴B'];
+        const defaultGuides = [];
+
+        // --- Firebase Sync Hook (The Magic) ---
+        // 這個 Hook 負責「本地資料」與「雲端資料」的雙向綁定
+        const useFirebaseSync = (collectionName, fieldName, defaultValue) => {
+            // 1. 初始化先讀取 LocalStorage (讓畫面秒開)
+            const [data, setData] = useState(() => {
                 try {
-                    const stickyValue = window.localStorage.getItem(key);
-                    return stickyValue !== null ? JSON.parse(stickyValue) : defaultValue;
-                } catch (e) { return defaultValue; }
+                    const local = window.localStorage.getItem(`jp_trip_2025_${fieldName}`);
+                    return local ? JSON.parse(local) : defaultValue;
+                } catch { return defaultValue; }
             });
+            const [isSyncing, setIsSyncing] = useState(false);
+
+            // 2. 訂閱 Firebase
             useEffect(() => {
-                window.localStorage.setItem(key, JSON.stringify(value));
-            }, [key, value]);
-            return [value, setValue];
+                if (!db) return; // 如果沒設定 Config，就只用 LocalStorage
+
+                const unsubscribe = db.collection(collectionName).doc(TRIP_DOC_ID)
+                    .onSnapshot((doc) => {
+                        if (doc.exists) {
+                            const remoteData = doc.data()[fieldName];
+                            if (remoteData) {
+                                console.log(`Syncing ${fieldName} from Cloud`);
+                                setData(remoteData);
+                                // 同時更新 LocalStorage 備份
+                                window.localStorage.setItem(`jp_trip_2025_${fieldName}`, JSON.stringify(remoteData));
+                            }
+                        } else {
+                            // 如果雲端沒資料，就建立預設值
+                            db.collection(collectionName).doc(TRIP_DOC_ID).set({ [fieldName]: defaultValue }, { merge: true });
+                        }
+                    }, (error) => {
+                        console.error("Firebase Sync Error:", error);
+                    });
+
+                return () => unsubscribe();
+            }, [collectionName, fieldName]);
+
+            // 3. 寫入函式 (同時更新 State 和 Cloud)
+            const updateData = (newData) => {
+                setData(newData); // 樂觀更新 (Optimistic UI)
+                window.localStorage.setItem(`jp_trip_2025_${fieldName}`, JSON.stringify(newData)); // 本地備份
+                
+                if (db) {
+                    setIsSyncing(true);
+                    db.collection(collectionName).doc(TRIP_DOC_ID).update({
+                        [fieldName]: newData
+                    }).then(() => setIsSyncing(false)).catch(e => {
+                        console.error("Write Error:", e);
+                        setIsSyncing(false);
+                    });
+                }
+            };
+
+            return [data, updateData, isSyncing];
         };
 
-        // --- Data ---
-        const defaultItinerary = [
-            // Day 1: 1/18
-            { id: 101, day: 1, time: '13:05', title: '高雄起飛 (CI0126)', location: '高雄國際機場', note: '✈️ 預計 17:30 抵達成田。出關後搭 Skyliner 直奔上野/秋葉原。' },
-            { id: 102, day: 1, time: '19:30', title: 'Check-in', location: '東京秋叶原嘉陽ビル', note: '🏨 放行李。位於秋葉原核心區。' },
-            { id: 104, day: 1, time: '21:00', title: '晚餐：鴨拉麵', location: 'Ramen Kamo to Negi Ueno Okachimachi Main Store', note: '🍢鴨拉麵。' },
-            // Day 2: 1/19
-            { id: 201, day: 2, time: '08:00', title: '出發前往川越', location: '池袋站', note: '🚆 轉乘東武東上線 (約30分)。' },
-            { id: 202, day: 2, time: '10:00', title: '川越 (小江戶)', location: '川越一番街', note: '⛩️ 必逛：冰川神社、時之鐘、菓子屋橫丁。' },
-            { id: 203, day: 2, time: '17:30', title: '移動至新宿', location: '新宿', note: '🏙️ 傍晚的新宿霓虹燈最美。' },
-            { id: 204, day: 2, time: '18:00', title: '晚餐：新宿居酒屋', location: '新宿', note: '🔥 找間氣氛好的店喝一杯。' },
-            // Day 3: 1/20
-            { id: 301, day: 3, time: '09:00', title: '築地市場', location: '築地場外市場', note: '🍣 早餐：狐狸屋牛丼、玉子燒。人多請注意錢包。' },
-            { id: 302, day: 3, time: '11:30', title: '秋葉原尋寶', location: '秋葉原 Mandarake', note: '🎮 白天的秋葉原，專攻二手模型與遊戲。' },
-            { id: 303, day: 3, time: '14:30', title: '淺草寺', location: '淺草雷門', note: '🏮 仲見世通吃「淺草炸肉餅」。參拜觀音。' },
-            { id: 304, day: 3, time: '17:00', title: '銀座逛街', location: '銀座', note: '🛍️ Uniqlo 旗艦店、Itoya 伊東屋文具。' },
-            // Day 4: 1/21
-            { id: 401, day: 4, time: '09:30', title: '明治神宮', location: '原宿站', note: '🌲 都市裡的森林，享受芬多精。' },
-            { id: 402, day: 4, time: '11:30', title: '表參道', location: '表參道 Hills', note: '☕ 時尚街拍，喝杯藍瓶咖啡。' },
-            { id: 403, day: 4, time: '14:00', title: '澀谷', location: '澀谷 Scramble', note: '🐕 忠犬八公、SHIBUYA SKY、Parco 任天堂商店。' },
-            // Day 5: 1/22
-            { id: 501, day: 5, time: '06:50', title: '集合出發 (KLOOK)', location: '東京巨蛋丸之內', note: '🚌 團體行程，請準時！' },
-            { id: 502, day: 5, time: '14:00', title: '銀山溫泉', location: '銀山溫泉', note: '♨️ 大正浪漫絕景！自由活動 90 分鐘。' },
-            { id: 503, day: 5, time: '18:00', title: '入住溫泉飯店', location: '山形縣', note: '🍱 享受會席料理與溫泉。' },
-            // Day 6: 1/23
-            { id: 602, day: 6, time: '10:00', title: '藏王樹冰', location: '藏王纜車', note: '❄️ 自由活動 2 小時。山頂極冷(-10度)！' },
-            { id: 603, day: 6, time: '12:00', title: '藏王狐狸村', location: '宮城藏王狐狸村', note: '🦊 抱狐狸體驗。門票¥1500。' },
-            { id: 604, day: 6, time: '21:00', title: '抵達東京', location: '新宿站', note: '🗼 結束兩天一夜行程，回飯店休息。' },
-            // Day 7: 1/24
-            { id: 701, day: 7, time: '09:00', title: 'Check-out', location: '東京秋叶原嘉陽ビル', note: '🧳 整理行李，寄放櫃檯。' },
-            { id: 702, day: 7, time: '10:00', title: '最後採買/上野', location: '阿美橫町', note: '🍬 買伴手禮、二木的菓子。' },
-            { id: 703, day: 7, time: '13:20', title: '成田起飛 (CI0103)', location: '成田機場 T2', note: '✈️ 平安回家！' }
-        ];
-
-        const defaultExpenses = [];
-
-        const defaultGuides = [
-            {
-                id: 1,
-                title: 'Skyliner (成田➜市區)',
-                type: 'transport',
-                content: '🚄 車程：成田機場 ➜ 京成上野 (約41分鐘)\n🎫 票價：來回約 ¥4,480 (建議先在 Klook/KKday 買好)\n💡 劃位：憑 QR Code 到售票機劃位，記得選「靠窗」看風景。'
-            },
-            {
-                id: 2,
-                title: 'JR 東北地區鐵路周遊券',
-                type: 'ticket',
-                content: '🎫 價格：¥30,000 (連續 5 天)\n✅ 範圍：東京、青森、仙台、山形、藏王\n⚠️ 規定：必須連續使用。進出站走人工或自動改札皆可。\n💡 劃位：建議提前在 JR East 官網預約新幹線指定席。'
-            },
-            {
-                id: 3,
-                title: '藏王樹冰 & 交通',
-                type: 'spot',
-                content: '🚌 交通：山形站前 1 號站牌搭巴士 (約40分)。\n🚠 纜車：山麓線 + 山頂線 (來回 ¥3,500)\n❄️ 裝備：極冷 (-10度)，務必戴毛帽、手套、防滑鞋。\n📸 拍攝：最佳拍攝點在纜車山頂站外的「地藏尊」。'
-            },
-            {
-                id: 4,
-                title: 'Suica / 交通卡',
-                type: 'shopping',
-                content: '📱 iPhone：錢包 App 直接按 + 新增 Suica (西瓜卡)，用 Apple Pay 儲值。\n🛒 使用：超商、販賣機、地鐵通用。\n⚠️ 餘額：離開日本前可去超商把餘額花完。'
-            }
-        ];
-        
-        const defaultUsers = ['NINA'];
-
-        // --- Toast Notification Component ---
+        // --- Toast ---
         const Toast = ({ message, visible }) => {
             if (!visible) return null;
             return (
                 <div className="fixed bottom-24 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white px-4 py-2 rounded-full shadow-lg z-[100] flex items-center gap-2 text-sm font-bold toast-enter">
-                    <Icon name="Check" size={16} className="text-jp-green" />
+                    <Icon name="Cloud" size={16} className="text-jp-blue" />
                     {message}
                 </div>
             );
         };
 
-        // --- Components ---
-
-        const BackgroundStickers = () => (
-            <div className="bg-sticker-layer">
-                <div className="sticker text-6xl" style={{top: '5%', left: '5%', transform: 'rotate(-10deg)'}}>🌸</div>
-                <div className="sticker text-6xl" style={{top: '15%', right: '10%', transform: 'rotate(15deg)'}}>🏮</div>
-                <div className="sticker text-6xl" style={{top: '30%', left: '-2%', transform: 'rotate(-5deg)'}}>🍡</div>
-                <div className="sticker text-8xl" style={{bottom: '25%', right: '-5%', transform: 'rotate(10deg)'}}>🏯</div>
-                <div className="sticker text-5xl" style={{top: '50%', left: '80%', transform: 'rotate(20deg)'}}>🍱</div>
-                <div className="sticker text-7xl" style={{bottom: '15%', left: '5%', transform: 'rotate(-15deg)'}}>🐱</div>
-                <div className="sticker text-6xl" style={{top: '70%', right: '60%', transform: 'rotate(5deg)'}}>❄️</div>
-                <div className="sticker text-4xl" style={{top: '2%', right: '40%', opacity: 0.1}}>✈️</div>
-                <div className="sticker text-9xl" style={{top: '40%', left: '30%', opacity: 0.05, filter: 'grayscale(100%)'}}>🗼</div>
+        // --- Config Warning Modal ---
+        const ConfigWarning = () => (
+            <div className="fixed inset-0 bg-black/80 z-[200] flex items-center justify-center p-6">
+                <div className="bg-white p-6 rounded-2xl max-w-sm w-full text-center">
+                    <Icon name="AlertTriangle" size={48} className="text-jp-yellow mx-auto mb-4" />
+                    <h2 className="text-xl font-bold text-gray-800 mb-2">尚未設定 Firebase</h2>
+                    <p className="text-sm text-gray-500 mb-4 text-left leading-relaxed">
+                        為了讓您和旅伴手機同步，請依以下步驟操作：<br/>
+                        1. 去 Firebase Console 開新專案<br/>
+                        2. 建立 Firestore 資料庫 (測試模式)<br/>
+                        3. 複製 Config 貼到程式碼第 135 行
+                    </p>
+                    <button onClick={() => window.location.reload()} className="w-full btn-jp-indigo py-3 rounded-xl font-bold">我已設定完成，重整頁面</button>
+                </div>
             </div>
         );
 
-        // Improved Itinerary Card with Separate Map Button
+        // --- Components (Same as before, simplified props) ---
+        // (省略 BackgroundStickers, ItineraryCard 等純 UI 組件的重複定義，直接使用邏輯)
+        const BackgroundStickers = () => (
+            <div className="bg-sticker-layer">
+                <div className="sticker text-6xl" style={{top: '5%', left: '5%', transform: 'rotate(-10deg)'}}>🌸</div>
+                <div className="sticker text-4xl" style={{top: '2%', right: '40%', opacity: 0.1}}>✈️</div>
+                <div className="sticker text-9xl" style={{top: '40%', left: '30%', opacity: 0.05, filter: 'grayscale(100%)'}}>🗼</div>
+                {/* 簡化貼圖數量以節省空間 */}
+            </div>
+        );
+
         const ItineraryCard = ({ item, isSnowDay, index, onEdit, onDelete }) => {
             const [showDelete, setShowDelete] = useState(false);
-            
             return (
                 <div className={`relative pl-6 border-l-4 ${isSnowDay ? 'border-slate-300' : 'border-stone-300'} last:border-0 mb-6 stagger-item`} style={{ animationDelay: `${index * 0.08}s` }}>
                     <div className={`absolute -left-[10px] top-0 w-5 h-5 rounded-full border-4 bg-white ${isSnowDay ? 'border-jp-blue' : 'border-jp-green'}`}></div>
-                    
-                    <div 
-                        className="card-glass p-5 rounded-3xl transition-transform duration-200 cursor-pointer group hover:scale-[1.01] active:scale-[0.99] relative overflow-hidden" 
-                        onClick={() => onEdit(item)}
-                    >
-                        {/* Time & Delete Header */}
+                    <div className="card-glass p-5 rounded-3xl transition-transform duration-200 cursor-pointer group hover:scale-[1.01] active:scale-[0.99] relative overflow-hidden" onClick={() => onEdit(item)}>
                         <div className="flex justify-between items-start mb-2">
-                            <div>
-                                <span className={`font-black font-mono text-xl tracking-tight ${isSnowDay ? 'text-jp-blue' : 'text-jp-green'}`}>{item.time}</span>
-                            </div>
-                            <button 
-                                onClick={(e) => { e.stopPropagation(); setShowDelete(true); }} 
-                                className="p-2 -mr-2 -mt-2 text-gray-300 hover:text-jp-red transition-colors rounded-full hover:bg-red-50"
-                            >
-                                <Icon name="Trash2" size={16} />
-                            </button>
+                            <div><span className={`font-black font-mono text-xl tracking-tight ${isSnowDay ? 'text-jp-blue' : 'text-jp-green'}`}>{item.time}</span></div>
+                            <button onClick={(e) => { e.stopPropagation(); setShowDelete(true); }} className="p-2 -mr-2 -mt-2 text-gray-300 hover:text-jp-red transition-colors rounded-full hover:bg-red-50"><Icon name="Trash2" size={16} /></button>
                         </div>
-                        
                         <h3 className="font-bold text-gray-800 text-lg mb-2 leading-snug">{item.title}</h3>
-                        
-                        {/* Location & Note Area */}
                         <div className="flex flex-col gap-2">
                             {item.location && (
                                 <div className="flex justify-between items-center mt-1">
-                                    <div className="text-gray-500 font-bold text-sm flex items-center gap-1.5 opacity-80">
-                                        <Icon name="MapPin" size={14} className="text-jp-red" />
-                                        <span className="truncate max-w-[160px]">{item.location}</span>
-                                    </div>
-                                    
-                                    {/* Dedicated Map Button - Prevents Accidental Clicks */}
-                                    <button 
-                                        className="nav-pill nav-pill-active"
-                                        onClick={(e) => { 
-                                            e.stopPropagation(); 
-                                            window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(item.location)}`, '_blank')
-                                        }}
-                                    >
-                                        <Icon name="Navigation2" size={12} />
-                                        MAP
-                                    </button>
+                                    <div className="text-gray-500 font-bold text-sm flex items-center gap-1.5 opacity-80"><Icon name="MapPin" size={14} className="text-jp-red" /><span className="truncate max-w-[160px]">{item.location}</span></div>
+                                    <button className="nav-pill nav-pill-active" onClick={(e) => { e.stopPropagation(); window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(item.location)}`, '_blank')}}><Icon name="Navigation2" size={12} />MAP</button>
                                 </div>
                             )}
-                            
-                            {item.note && (
-                                <div className="sticky-note">
-                                    {item.note.split('\n').map((line, i) => <div key={i}>{line}</div>)}
-                                </div>
-                            )}
+                            {item.note && <div className="sticky-note">{item.note.split('\n').map((line, i) => <div key={i}>{line}</div>)}</div>}
                         </div>
                     </div>
-                    
-                    {/* Inline Delete Confirmation */}
                     {showDelete && (
                         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[100] flex items-center justify-center p-4 animate-modal" onClick={(e) => {e.stopPropagation(); setShowDelete(false)}}>
                             <div className="bg-white p-6 rounded-3xl shadow-2xl w-64 text-center transform scale-100" onClick={e => e.stopPropagation()}>
@@ -449,31 +448,18 @@
             );
         }
 
+        // ExchangeRateCard remains same...
         const ExchangeRateCard = () => {
             const [rate, setRate] = useState(null); 
             const [loading, setLoading] = useState(true);
             const [jpyVal, setJpyVal] = useState('');
             const [twdVal, setTwdVal] = useState('');
-
             useEffect(() => {
                 fetch('https://api.exchangerate-api.com/v4/latest/JPY')
-                    .then(res => res.json())
-                    .then(data => { setRate(data.rates.TWD); setLoading(false); })
-                    .catch(() => setLoading(false));
+                    .then(res => res.json()).then(data => { setRate(data.rates.TWD); setLoading(false); }).catch(() => setLoading(false));
             }, []);
-
-            const handleJpyChange = (e) => {
-                const val = e.target.value;
-                setJpyVal(val);
-                if (rate && !isNaN(val)) setTwdVal(val ? (parseFloat(val) * rate).toFixed(0) : '');
-            };
-
-            const handleTwdChange = (e) => {
-                const val = e.target.value;
-                setTwdVal(val);
-                if (rate && !isNaN(val)) setJpyVal(val ? (parseFloat(val) / rate).toFixed(0) : '');
-            };
-
+            const handleJpyChange = (e) => { const val = e.target.value; setJpyVal(val); if (rate && !isNaN(val)) setTwdVal(val ? (parseFloat(val) * rate).toFixed(0) : ''); };
+            const handleTwdChange = (e) => { const val = e.target.value; setTwdVal(val); if (rate && !isNaN(val)) setJpyVal(val ? (parseFloat(val) / rate).toFixed(0) : ''); };
             return (
                 <div className="bg-[#4A5568] text-gray-100 p-0 rounded-3xl shadow-lg mb-8 relative overflow-hidden transition-all active:scale-[0.99] flex flex-col page-enter" style={{animationDelay: '0.1s'}}>
                     <div className="bg-[#2D3748] p-4 flex justify-between items-center border-b-2 border-dashed border-gray-500 relative">
@@ -484,15 +470,9 @@
                     </div>
                     <div className="p-6">
                         <div className="flex items-center gap-6">
-                            <div className="flex-1">
-                                <label className="text-[10px] text-gray-400 block mb-1 font-bold tracking-wider">JAPAN (JPY)</label>
-                                <input type="number" value={jpyVal} onChange={handleJpyChange} className="bg-transparent border-b border-gray-400 w-full text-2xl font-mono focus:border-white outline-none py-1" placeholder="0" />
-                            </div>
+                            <div className="flex-1"><label className="text-[10px] text-gray-400 block mb-1 font-bold tracking-wider">JAPAN (JPY)</label><input type="number" value={jpyVal} onChange={handleJpyChange} className="bg-transparent border-b border-gray-400 w-full text-2xl font-mono focus:border-white outline-none py-1" placeholder="0" /></div>
                             <Icon name="ArrowRightLeft" size={18} className="text-gray-500" />
-                            <div className="flex-1 text-right">
-                                <label className="text-[10px] text-gray-400 block mb-1 font-bold tracking-wider">TAIWAN (TWD)</label>
-                                <input type="number" value={twdVal} onChange={handleTwdChange} className="bg-transparent border-b border-gray-400 w-full text-2xl font-mono focus:border-white outline-none py-1 text-right" placeholder="0" />
-                            </div>
+                            <div className="flex-1 text-right"><label className="text-[10px] text-gray-400 block mb-1 font-bold tracking-wider">TAIWAN (TWD)</label><input type="number" value={twdVal} onChange={handleTwdChange} className="bg-transparent border-b border-gray-400 w-full text-2xl font-mono focus:border-white outline-none py-1 text-right" placeholder="0" /></div>
                         </div>
                     </div>
                 </div>
@@ -504,96 +484,45 @@
             const [isAdding, setIsAdding] = useState(false);
             const [editingItem, setEditingItem] = useState(null);
             const [newItem, setNewItem] = useState({ time: '', title: '', location: '', note: '' });
-            
             const daysData = [
-                { day: 1, date: '1/18', week: '(日)' },
-                { day: 2, date: '1/19', week: '(一)' },
-                { day: 3, date: '1/20', week: '(二)' },
-                { day: 4, date: '1/21', week: '(三)' },
-                { day: 5, date: '1/22', week: '(四)' },
-                { day: 6, date: '1/23', week: '(五)' },
-                { day: 7, date: '1/24', week: '(六)' },
+                { day: 1, date: '1/18', week: '(六)' }, { day: 2, date: '1/19', week: '(日)' }, { day: 3, date: '1/20', week: '(一)' },
+                { day: 4, date: '1/21', week: '(二)' }, { day: 5, date: '1/22', week: '(三)' }, { day: 6, date: '1/23', week: '(四)' }, { day: 7, date: '1/24', week: '(五)' },
             ];
-
             const filteredItems = items.filter(i => i.day === selectedDay).sort((a, b) => a.time.localeCompare(b.time));
             const isSnowDay = selectedDay >= 5 && selectedDay <= 6;
 
-            const handleDelete = (id) => {
-                setItems(items.filter(i => i.id !== id));
-                showToast("行程已刪除");
-            };
-
+            const handleDelete = (id) => { setItems(items.filter(i => i.id !== id)); showToast("已同步刪除"); };
             const handleAdd = () => {
                 if (!newItem.title || !newItem.time) return;
                 setItems([...items, { ...newItem, id: Date.now(), day: selectedDay }]);
-                setIsAdding(false);
-                setNewItem({ time: '', title: '', location: '', note: '' });
-                showToast("行程已新增");
+                setIsAdding(false); setNewItem({ time: '', title: '', location: '', note: '' }); showToast("已同步新增");
             };
-
             const handleUpdate = () => {
                 if (!editingItem.title || !editingItem.time) return;
                 setItems(items.map(i => i.id === editingItem.id ? editingItem : i));
-                setEditingItem(null);
-                showToast("行程已更新");
+                setEditingItem(null); showToast("已同步更新");
             };
 
             return (
                 <div className="flex flex-col h-full w-full page-enter">
                     <BackgroundStickers />
-                    
                     <div className="scroll-container p-5">
                         <header className="mb-6 mt-2 flex justify-between items-center relative z-20">
-                            <div>
-                                <h1 className="text-2xl font-black text-gray-800 tracking-wider flex items-center gap-2">
-                                    {isSnowDay ? '東北雪見' : '東京散策'}
-                                    <span className="text-xl opacity-80">{isSnowDay ? '❄️' : '🗼'}</span>
-                                </h1>
-                            </div>
-                            <button 
-                                onClick={() => setIsAdding(true)} 
-                                className="btn-theme-action text-white px-4 py-2 rounded-full font-bold flex items-center gap-1 active:scale-95"
-                            >
-                                <Icon name="Plus" size={18} strokeWidth={3} />
-                                <span className="text-sm">新增行程</span>
-                            </button>
+                            <div><h1 className="text-2xl font-black text-gray-800 tracking-wider flex items-center gap-2">{isSnowDay ? '東北雪見' : '東京散策'}<span className="text-xl opacity-80">{isSnowDay ? '❄️' : '🗼'}</span></h1></div>
+                            <button onClick={() => setIsAdding(true)} className="btn-theme-action text-white px-4 py-2 rounded-full font-bold flex items-center gap-1 active:scale-95"><Icon name="Plus" size={18} strokeWidth={3} /><span className="text-sm">新增行程</span></button>
                         </header>
-
                         <div className="flex gap-3 mb-8 overflow-x-auto no-scrollbar pb-6 pt-2 snap-x snap-mandatory relative z-20 px-1">
-                            {daysData.map(d => {
-                                const isSelected = selectedDay === d.day;
-                                const isSnow = d.day >= 5 && d.day <= 6;
-                                return (
-                                    <button 
-                                        key={d.day} 
-                                        onClick={() => setSelectedDay(d.day)} 
-                                        className={`snap-center flex flex-col items-center justify-center min-w-[4.8rem] h-20 rounded-2xl transition-all duration-300 transform border ${
-                                            isSelected
-                                                ? (isSnow ? 'date-active-snow border-transparent' : 'date-active border-transparent')
-                                                : 'date-inactive'
-                                        }`}
-                                    >
-                                        <span className={`text-xs font-bold ${isSelected ? 'opacity-90' : 'opacity-60'}`}>{d.week}</span>
-                                        <span className="text-2xl font-black font-mono tracking-tight">{d.date}</span>
-                                    </button>
-                                );
-                            })}
-                        </div>
-
-                        <div className="relative z-10 pb-20">
-                            {filteredItems.map((item, idx) => (
-                                <ItineraryCard key={item.id} item={item} isSnowDay={isSnowDay} index={idx} onEdit={setEditingItem} onDelete={handleDelete} />
+                            {daysData.map(d => (
+                                <button key={d.day} onClick={() => setSelectedDay(d.day)} className={`snap-center flex flex-col items-center justify-center min-w-[4.8rem] h-20 rounded-2xl transition-all duration-300 transform border ${selectedDay === d.day ? (d.day >= 5 && d.day <= 6 ? 'date-active-snow border-transparent' : 'date-active border-transparent') : 'date-inactive'}`}>
+                                    <span className={`text-xs font-bold ${selectedDay === d.day ? 'opacity-90' : 'opacity-60'}`}>{d.week}</span><span className="text-2xl font-black font-mono tracking-tight">{d.date}</span>
+                                </button>
                             ))}
-                            {filteredItems.length === 0 && (
-                                <div className="text-center py-16 opacity-50 page-enter">
-                                    <div className="text-4xl mb-2 grayscale">💤</div>
-                                    <div className="text-gray-500 font-bold text-sm">暫無行程</div>
-                                </div>
-                            )}
+                        </div>
+                        <div className="relative z-10 pb-20">
+                            {filteredItems.map((item, idx) => (<ItineraryCard key={item.id} item={item} isSnowDay={isSnowDay} index={idx} onEdit={setEditingItem} onDelete={handleDelete} />))}
+                            {filteredItems.length === 0 && <div className="text-center py-16 opacity-50 page-enter"><div className="text-4xl mb-2 grayscale">💤</div><div className="text-gray-500 font-bold text-sm">暫無行程</div></div>}
                         </div>
                     </div>
-
-                    {/* Add Modal */}
                     {isAdding && (
                         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4 animate-modal">
                             <div className="bg-white w-full sm:w-96 rounded-t-3xl sm:rounded-3xl p-6 shadow-2xl pb-safe max-h-[85vh] overflow-y-auto">
@@ -611,8 +540,6 @@
                             </div>
                         </div>
                     )}
-
-                    {/* Edit Modal */}
                     {editingItem && (
                         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4 animate-modal">
                             <div className="bg-white w-full sm:w-96 rounded-t-3xl sm:rounded-3xl p-6 shadow-2xl pb-safe max-h-[85vh] overflow-y-auto">
@@ -637,85 +564,43 @@
         const GuideView = ({ guides, setGuides, showToast }) => {
             const [isAdding, setIsAdding] = useState(false);
             const [newGuide, setNewGuide] = useState({ title: '', content: '', type: 'transport' });
-
-            const typeMap = {
-                transport: { icon: 'TrainFront', color: 'text-blue-600', label: '交通' },
-                ticket: { icon: 'Ticket', color: 'text-green-600', label: '票券' },
-                spot: { icon: 'MapPin', color: 'text-red-500', label: '景點' },
-                shopping: { icon: 'ShoppingBag', color: 'text-orange-500', label: '購物' },
-            };
+            const typeMap = { transport: { icon: 'TrainFront', color: 'text-blue-600', label: '交通' }, ticket: { icon: 'Ticket', color: 'text-green-600', label: '票券' }, spot: { icon: 'MapPin', color: 'text-red-500', label: '景點' }, shopping: { icon: 'ShoppingBag', color: 'text-orange-500', label: '購物' } };
 
             const handleAdd = () => {
                 if (!newGuide.title || !newGuide.content) return;
-                setGuides([...guides, { ...newGuide, id: Date.now() }]);
-                setIsAdding(false);
-                setNewGuide({ title: '', content: '', type: 'transport' });
-                showToast("攻略已新增");
+                setGuides([...guides, { ...newGuide, id: Date.now() }]); setIsAdding(false); setNewGuide({ title: '', content: '', type: 'transport' }); showToast("已同步新增");
             };
-
-            const handleDelete = (id) => {
-                if(confirm('確定刪除此攻略？')) {
-                    setGuides(guides.filter(g => g.id !== id));
-                    showToast("攻略已刪除");
-                }
-            };
+            const handleDelete = (id) => { if(confirm('確定刪除？')) { setGuides(guides.filter(g => g.id !== id)); showToast("已同步刪除"); } };
 
             return (
                 <div className="p-5 h-full relative z-10 animate-fade-in scroll-container page-enter">
                     <BackgroundStickers />
                     <header className="mb-6 flex justify-between items-center relative z-20">
                          <h1 className="text-2xl font-black text-gray-800 flex items-center gap-2">交通攻略 <span className="text-xl">🚄</span></h1>
-                         <button 
-                                onClick={() => setIsAdding(true)} 
-                                className="btn-theme-action text-white px-3 py-1.5 rounded-full shadow-md font-bold flex items-center gap-1 active:scale-95 transition-all"
-                            >
-                                <Icon name="Plus" size={16} strokeWidth={3} />
-                                <span className="text-xs">新增</span>
-                        </button>
+                         <button onClick={() => setIsAdding(true)} className="btn-theme-action text-white px-3 py-1.5 rounded-full shadow-md font-bold flex items-center gap-1 active:scale-95 transition-all"><Icon name="Plus" size={16} strokeWidth={3} /><span className="text-xs">新增</span></button>
                     </header>
-                    
                     <div className="space-y-5 pb-20 relative z-10">
                         {guides.map((g, i) => {
                              const style = typeMap[g.type] || typeMap['transport'];
                              return (
                                 <div key={g.id} className="transport-card stagger-item relative group" style={{animationDelay: `${i*0.05}s`}}>
                                     <button onClick={() => handleDelete(g.id)} className="absolute top-4 right-4 text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity p-1"><Icon name="Trash2" size={16} /></button>
-                                    <h3 className={`text-lg font-bold mb-3 flex items-center gap-2 ${style.color}`}>
-                                        <Icon name={style.icon} size={22} /> {g.title}
-                                    </h3>
-                                    <ul className="space-y-2">
-                                        {g.content.split('\n').map((line, idx) => (
-                                            <li key={idx} className="text-sm text-gray-600 pl-4 border-l-2 border-gray-200 leading-relaxed whitespace-pre-wrap">
-                                                {line}
-                                            </li>
-                                        ))}
-                                    </ul>
+                                    <h3 className={`text-lg font-bold mb-3 flex items-center gap-2 ${style.color}`}><Icon name={style.icon} size={22} /> {g.title}</h3>
+                                    <ul className="space-y-2">{g.content.split('\n').map((line, idx) => (<li key={idx} className="text-sm text-gray-600 pl-4 border-l-2 border-gray-200 leading-relaxed whitespace-pre-wrap">{line}</li>))}</ul>
                                 </div>
                              );
                         })}
                     </div>
-
-                    {/* Add Guide Modal */}
                     {isAdding && (
                         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4 animate-modal">
                             <div className="bg-white w-full sm:w-96 rounded-t-3xl sm:rounded-3xl p-6 shadow-2xl pb-safe max-h-[85vh] overflow-y-auto">
                                 <h3 className="text-lg font-bold mb-4 text-gray-800">新增攻略筆記</h3>
                                 <div className="space-y-4">
-                                    <input type="text" placeholder="標題 (例: JR Pass 使用規則)" value={newGuide.title} onChange={e => setNewGuide({...newGuide, title: e.target.value})} className="input-light" />
-                                    
+                                    <input type="text" placeholder="標題" value={newGuide.title} onChange={e => setNewGuide({...newGuide, title: e.target.value})} className="input-light" />
                                     <div className="flex gap-2 mb-2 overflow-x-auto no-scrollbar pb-1">
-                                        {Object.entries(typeMap).map(([key, val]) => (
-                                            <button 
-                                                key={key}
-                                                onClick={() => setNewGuide({...newGuide, type: key})}
-                                                className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap border transition-all flex items-center gap-1 ${newGuide.type === key ? 'bg-gray-800 text-white border-gray-800' : 'bg-gray-50 text-gray-500 border-gray-200'}`}
-                                            >
-                                                <Icon name={val.icon} size={14} /> {val.label}
-                                            </button>
-                                        ))}
+                                        {Object.entries(typeMap).map(([key, val]) => (<button key={key} onClick={() => setNewGuide({...newGuide, type: key})} className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap border transition-all flex items-center gap-1 ${newGuide.type === key ? 'bg-gray-800 text-white border-gray-800' : 'bg-gray-50 text-gray-500 border-gray-200'}`}><Icon name={val.icon} size={14} /> {val.label}</button>))}
                                     </div>
-
-                                    <textarea placeholder="內容 (可換行)" value={newGuide.content} onChange={e => setNewGuide({...newGuide, content: e.target.value})} className="input-light h-32 leading-relaxed"></textarea>
+                                    <textarea placeholder="內容" value={newGuide.content} onChange={e => setNewGuide({...newGuide, content: e.target.value})} className="input-light h-32 leading-relaxed"></textarea>
                                 </div>
                                 <div className="flex gap-3 mt-4">
                                     <button onClick={() => setIsAdding(false)} className="flex-1 py-3 text-gray-500 font-bold bg-gray-100 rounded-xl">取消</button>
@@ -732,91 +617,39 @@
             const [newExp, setNewExp] = useState({ title: '', amount: '', payer: '' });
             const [isAddingUser, setIsAddingUser] = useState(false);
             const [newUserName, setNewUserName] = useState('');
-            const [deleteConfirmation, setDeleteConfirmation] = useState(null); // ID of expense to delete
-            const [userToDelete, setUserToDelete] = useState(null); // Name of user to delete
+            const [deleteConfirmation, setDeleteConfirmation] = useState(null); 
+            const [userToDelete, setUserToDelete] = useState(null); 
 
-            useEffect(() => {
-                if (users.length > 0 && !newExp.payer) {
-                    setNewExp(prev => ({ ...prev, payer: users[0] }));
-                }
-            }, [users]);
+            useEffect(() => { if (users.length > 0 && !newExp.payer) { setNewExp(prev => ({ ...prev, payer: users[0] })); } }, [users]);
 
             const debtSummary = useMemo(() => {
-                let balances = {};
-                users.forEach(u => balances[u] = 0);
+                let balances = {}; users.forEach(u => balances[u] = 0);
                 let totalSpent = 0;
                 expenses.forEach(e => {
                     const payer = users.includes(e.payer) ? e.payer : users[0];
                     if (!payer) return;
-                    const cost = parseFloat(e.amount);
-                    totalSpent += cost;
-                    balances[payer] += cost;
-                    const splitAmount = cost / users.length;
-                    users.forEach(u => balances[u] -= splitAmount);
+                    const cost = parseFloat(e.amount); totalSpent += cost; balances[payer] += cost;
+                    const splitAmount = cost / users.length; users.forEach(u => balances[u] -= splitAmount);
                 });
                 const debts = [];
-                const debtors = users.filter(u => balances[u] < -1);
-                const creditors = users.filter(u => balances[u] > 1);
-                debtors.sort((a, b) => balances[a] - balances[b]);
-                creditors.sort((a, b) => balances[b] - balances[a]);
+                const debtors = users.filter(u => balances[u] < -1); const creditors = users.filter(u => balances[u] > 1);
+                debtors.sort((a, b) => balances[a] - balances[b]); creditors.sort((a, b) => balances[b] - balances[a]);
                 let i = 0, j = 0;
                 while (i < debtors.length && j < creditors.length) {
-                    let debtor = debtors[i];
-                    let creditor = creditors[j];
+                    let debtor = debtors[i]; let creditor = creditors[j];
                     let amount = Math.min(Math.abs(balances[debtor]), balances[creditor]);
                     if (amount > 0) debts.push({ from: debtor, to: creditor, amount: Math.round(amount) });
-                    balances[debtor] += amount;
-                    balances[creditor] -= amount;
-                    if (Math.abs(balances[debtor]) < 1) i++;
-                    if (balances[creditor] < 1) j++;
+                    balances[debtor] += amount; balances[creditor] -= amount;
+                    if (Math.abs(balances[debtor]) < 1) i++; if (balances[creditor] < 1) j++;
                 }
                 return { debts, totalSpent };
             }, [expenses, users]);
 
-            const handleAddUser = () => {
-                if (newUserName.trim() && !users.includes(newUserName.trim())) {
-                    setUsers([...users, newUserName.trim()]);
-                    setNewUserName('');
-                    setIsAddingUser(false);
-                    showToast("成員已新增");
-                }
-            };
-
-            const promptDeleteUser = (u) => {
-                if (users.length <= 1) { alert("至少保留一位成員"); return; }
-                setUserToDelete(u);
-            };
-
-            const confirmDeleteUser = () => {
-                if (userToDelete) {
-                    setUsers(users.filter(user => user !== userToDelete));
-                    setUserToDelete(null);
-                    showToast("成員已移除");
-                }
-            };
-
-            const handleAddExpense = () => {
-                if (!newExp.title || !newExp.amount) return;
-                setExpenses([...expenses, { ...newExp, id: Date.now(), amount: parseFloat(newExp.amount) }]);
-                setNewExp({ title: '', amount: '', payer: users[0] || '' });
-                showToast("款項已記錄");
-            };
-
-            const confirmDeleteExpense = () => {
-                if(deleteConfirmation) {
-                    setExpenses(expenses.filter(e => e.id !== deleteConfirmation));
-                    setDeleteConfirmation(null);
-                    showToast("款項已刪除");
-                }
-            };
-
-            const handleResetData = () => {
-                if(confirm("確定重置所有分帳資料？(無法復原)")) {
-                    setExpenses([]);
-                    setUsers(defaultUsers);
-                    showToast("資料已重置");
-                }
-            }
+            const handleAddUser = () => { if (newUserName.trim() && !users.includes(newUserName.trim())) { setUsers([...users, newUserName.trim()]); setNewUserName(''); setIsAddingUser(false); showToast("已同步新增成員"); } };
+            const promptDeleteUser = (u) => { if (users.length <= 1) { alert("至少保留一位成員"); return; } setUserToDelete(u); };
+            const confirmDeleteUser = () => { if (userToDelete) { setUsers(users.filter(user => user !== userToDelete)); setUserToDelete(null); showToast("已同步移除成員"); } };
+            const handleAddExpense = () => { if (!newExp.title || !newExp.amount) return; setExpenses([...expenses, { ...newExp, id: Date.now(), amount: parseFloat(newExp.amount) }]); setNewExp({ title: '', amount: '', payer: users[0] || '' }); showToast("款項已同步"); };
+            const confirmDeleteExpense = () => { if(deleteConfirmation) { setExpenses(expenses.filter(e => e.id !== deleteConfirmation)); setDeleteConfirmation(null); showToast("款項已同步刪除"); } };
 
             return (
                 <div className="p-5 h-full relative z-10 animate-fade-in scroll-container page-enter">
@@ -889,7 +722,7 @@
                         </div>
                     </div>
 
-                    <div className="space-y-4 pb-12 relative z-10">
+                    <div className="space-y-4 pb-24 relative z-10">
                         {expenses.slice().reverse().map((exp, idx) => (
                             <div key={exp.id} className="bg-white/95 p-4 rounded-3xl shadow-sm flex justify-between items-center border-l-4 border-jp-yellow stagger-item" style={{ animationDelay: `${idx * 0.05}s` }}>
                                 <div>
@@ -903,12 +736,7 @@
                             </div>
                         ))}
                     </div>
-                    
-                    <div className="pb-24 text-center">
-                        <button onClick={handleResetData} className="text-xs text-gray-400 underline p-4">重置所有資料</button>
-                    </div>
 
-                    {/* Delete Expense Modal */}
                     {deleteConfirmation && (
                         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4 animate-modal">
                             <div className="bg-white p-6 rounded-3xl shadow-xl w-64 text-center">
@@ -920,8 +748,6 @@
                             </div>
                         </div>
                     )}
-                    
-                    {/* Delete User Modal */}
                     {userToDelete && (
                         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4 animate-modal">
                             <div className="bg-white p-6 rounded-3xl shadow-xl w-64 text-center">
@@ -944,14 +770,9 @@
                 <h1 className="text-2xl font-black text-gray-800 mb-6 flex items-center gap-2">景點地圖 <span className="text-xl">🗺️</span></h1>
                 <div className="grid gap-4 pb-20 relative z-10">
                     {items.filter(i => i.location).map((item, idx) => (
-                        <div key={item.id} className="bg-white/90 backdrop-blur-md p-4 rounded-3xl shadow-sm flex items-center gap-3 stagger-item active:scale-98 transition-transform border border-gray-100"
-                             style={{ animationDelay: `${idx * 0.05}s` }}
-                             onClick={() => window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(item.location)}`, '_blank')}>
+                        <div key={item.id} className="bg-white/90 backdrop-blur-md p-4 rounded-3xl shadow-sm flex items-center gap-3 stagger-item active:scale-98 transition-transform border border-gray-100" style={{ animationDelay: `${idx * 0.05}s` }} onClick={() => window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(item.location)}`, '_blank')}>
                             <div className="bg-blue-100 w-10 h-10 rounded-full flex items-center justify-center text-jp-blue shadow-sm shrink-0"><Icon name="MapPin" size={20} /></div>
-                            <div className="overflow-hidden">
-                                <div className="text-base font-bold text-gray-800 truncate">{item.location}</div>
-                                <div className="text-xs font-bold text-gray-400 mt-0.5">Day {item.day} • {item.title}</div>
-                            </div>
+                            <div className="overflow-hidden"><div className="text-base font-bold text-gray-800 truncate">{item.location}</div><div className="text-xs font-bold text-gray-400 mt-0.5">Day {item.day} • {item.title}</div></div>
                             <div className="ml-auto text-gray-300"><Icon name="ChevronRight" size={20} /></div>
                         </div>
                     ))}
@@ -970,9 +791,7 @@
                 <div className="tab-bar-glass pb-safe-bottom pt-2 px-4 flex justify-around z-50 rounded-t-3xl border-t border-gray-100/50">
                     {tabs.map(tab => (
                         <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`flex flex-col items-center w-20 py-2 transition-all duration-300 active:scale-95 ${activeTab === tab.id ? `${tab.color} -translate-y-1` : 'text-gray-400'}`}>
-                            <div className={`p-2 rounded-full transition-colors duration-300 ${activeTab === tab.id ? 'bg-gray-100/80 shadow-inner' : 'bg-transparent'}`}>
-                                <Icon name={tab.icon} size={22} className={activeTab === tab.id ? "stroke-[2.5px]" : "stroke-[2px]"} />
-                            </div>
+                            <div className={`p-2 rounded-full transition-colors duration-300 ${activeTab === tab.id ? 'bg-gray-100/80 shadow-inner' : 'bg-transparent'}`}><Icon name={tab.icon} size={22} className={activeTab === tab.id ? "stroke-[2.5px]" : "stroke-[2px]"} /></div>
                             <span className="text-[10px] mt-1 font-bold tracking-tight">{tab.label}</span>
                         </button>
                     ))}
@@ -982,12 +801,17 @@
 
         const App = () => {
             const [activeTab, setActiveTab] = useState('itinerary');
-            // Fixed keys to ensure persistence across sessions and code updates
-            const [itineraryItems, setItineraryItems] = useStickyState(defaultItinerary, 'jp_trip_2025_data_itinerary');
-            const [expenses, setExpenses] = useStickyState(defaultExpenses, 'jp_trip_2025_data_expenses');
-            const [users, setUsers] = useStickyState(defaultUsers, 'jp_trip_2025_data_users');
-            const [guides, setGuides] = useStickyState(defaultGuides, 'jp_trip_2025_data_guides');
+            // Replaced useStickyState with useFirebaseSync for robust data persistence
+            const [itineraryItems, setItineraryItems, syncingItinerary] = useFirebaseSync('trips', 'itinerary', defaultItinerary);
+            const [expenses, setExpenses, syncingExpenses] = useFirebaseSync('trips', 'expenses', defaultExpenses);
+            const [users, setUsers, syncingUsers] = useFirebaseSync('trips', 'users', defaultUsers);
+            const [guides, setGuides, syncingGuides] = useFirebaseSync('trips', 'guides', defaultGuides);
             const [toast, setToast] = useState({ msg: '', visible: false });
+
+            // 如果沒有 Firebase Config，顯示警告
+            if (!firebaseConfig.projectId) {
+                return <ConfigWarning />;
+            }
 
             const showToast = (msg) => {
                 setToast({ msg, visible: true });
@@ -1006,7 +830,7 @@
 
             return (
                 <div id="app-container">
-                    {/* Key 屬性強制重新渲染 - 用於觸發 CSS Animation */}
+                    {(syncingItinerary || syncingExpenses || syncingUsers || syncingGuides) && <div className="fixed top-0 right-0 p-2 z-[200]"><div className="w-2 h-2 bg-jp-green rounded-full animate-ping"></div></div>}
                     <div key={activeTab} style={{height: '100%', width: '100%', position: 'absolute', top: 0, left: 0}}>
                         {renderContent()}
                     </div>
