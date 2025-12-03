@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>2025 東京東北・雪見手帖 (Smooth UX Ver.)</title>
+    <title>2026 東京東北・雪見手帖</title>
     
     <!-- React & ReactDOM -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
@@ -237,6 +237,11 @@
             color: var(--jp-indigo);
             border-color: var(--jp-indigo);
             box-shadow: 0 2px 8px rgba(26, 93, 138, 0.15);
+        }
+
+        /* Utility for safe bottom padding + extra space for buttons */
+        .pb-safe {
+            padding-bottom: calc(24px + env(safe-area-inset-bottom));
         }
     </style>
 </head>
@@ -578,7 +583,7 @@
                     {/* Add Modal */}
                     {isAdding && (
                         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4 animate-modal">
-                            <div className="bg-white w-full sm:w-96 rounded-t-3xl sm:rounded-3xl p-6 shadow-2xl pb-safe-bottom">
+                            <div className="bg-white w-full sm:w-96 rounded-t-3xl sm:rounded-3xl p-6 shadow-2xl pb-safe max-h-[85vh] overflow-y-auto">
                                 <h3 className="text-lg font-bold mb-4 text-gray-800">新增 {daysData[selectedDay-1].date} 行程</h3>
                                 <div className="space-y-4">
                                     <input type="time" value={newItem.time} onChange={e => setNewItem({...newItem, time: e.target.value})} className="input-light" required />
@@ -597,7 +602,7 @@
                     {/* Edit Modal */}
                     {editingItem && (
                         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4 animate-modal">
-                            <div className="bg-white w-full sm:w-96 rounded-t-3xl sm:rounded-3xl p-6 shadow-2xl pb-safe-bottom">
+                            <div className="bg-white w-full sm:w-96 rounded-t-3xl sm:rounded-3xl p-6 shadow-2xl pb-safe max-h-[85vh] overflow-y-auto">
                                 <h3 className="text-lg font-bold mb-4 text-gray-800">編輯行程</h3>
                                 <div className="space-y-4">
                                     <input type="time" value={editingItem.time} onChange={e => setEditingItem({...editingItem, time: e.target.value})} className="input-light" required />
@@ -678,7 +683,7 @@
                     {/* Add Guide Modal */}
                     {isAdding && (
                         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4 animate-modal">
-                            <div className="bg-white w-full sm:w-96 rounded-t-3xl sm:rounded-3xl p-6 shadow-2xl pb-safe-bottom">
+                            <div className="bg-white w-full sm:w-96 rounded-t-3xl sm:rounded-3xl p-6 shadow-2xl pb-safe max-h-[85vh] overflow-y-auto">
                                 <h3 className="text-lg font-bold mb-4 text-gray-800">新增攻略筆記</h3>
                                 <div className="space-y-4">
                                     <input type="text" placeholder="標題 (例: JR Pass 使用規則)" value={newGuide.title} onChange={e => setNewGuide({...newGuide, title: e.target.value})} className="input-light" />
