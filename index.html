@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>2026 東京東北・雪見手帖</title>
+    <title>2025 東京東北・雪見手帖 (Stable Storage Ver.)</title>
     
     <!-- React & ReactDOM -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
@@ -114,9 +114,7 @@
             overflow: hidden;
         }
 
-        /* Improved Page Transitions 
-           Using a physics-based cubic-bezier for a "springy" feel
-        */
+        /* Improved Page Transitions */
         .page-enter {
             animation: pageSlideUp 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
         }
@@ -125,7 +123,6 @@
             100% { opacity: 1; transform: translateY(0) scale(1); } 
         }
 
-        /* Staggered items animation */
         .stagger-item { 
             opacity: 0; 
             animation: itemSlideIn 0.5s cubic-bezier(0.25, 1, 0.5, 1) forwards; 
@@ -214,7 +211,6 @@
             color: white;
         }
 
-        /* Nav Pill Style */
         .nav-pill {
             background-color: #EDF2F7;
             color: #4A5568;
@@ -239,9 +235,17 @@
             box-shadow: 0 2px 8px rgba(26, 93, 138, 0.15);
         }
 
-        /* Utility for safe bottom padding + extra space for buttons */
         .pb-safe {
             padding-bottom: calc(24px + env(safe-area-inset-bottom));
+        }
+
+        /* Toast Notification */
+        .toast-enter {
+            animation: toastSlideUp 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+        }
+        @keyframes toastSlideUp {
+            from { transform: translate(-50%, 100%); opacity: 0; }
+            to { transform: translate(-50%, 0); opacity: 1; }
         }
     </style>
 </head>
@@ -265,7 +269,7 @@
             );
         };
 
-        // --- Persistence Hook ---
+        // --- Persistence Hook (Fixed Key) ---
         const useStickyState = (defaultValue, key) => {
             const [value, setValue] = useState(() => {
                 try {
@@ -284,7 +288,7 @@
             // Day 1: 1/18
             { id: 101, day: 1, time: '13:05', title: '高雄起飛 (CI0126)', location: '高雄國際機場', note: '✈️ 預計 17:30 抵達成田。出關後搭 Skyliner 直奔上野/秋葉原。' },
             { id: 102, day: 1, time: '19:30', title: 'Check-in', location: '東京秋叶原嘉陽ビル', note: '🏨 放行李。位於秋葉原核心區。' },
-            { id: 104, day: 1, time: '20:00', title: '晚餐：鴨拉麵', location: 'Ramen Kamo to Negi Ueno Okachimachi Main Store', note: '🍢 均一價燒鳥居酒屋。' },
+            { id: 104, day: 1, time: '21:00', title: '晚餐：鴨拉麵', location: 'Ramen Kamo to Negi Ueno Okachimachi Main Store', note: '🍢鴨拉麵。' },
             // Day 2: 1/19
             { id: 201, day: 2, time: '08:00', title: '出發前往川越', location: '池袋站', note: '🚆 轉乘東武東上線 (約30分)。' },
             { id: 202, day: 2, time: '10:00', title: '川越 (小江戶)', location: '川越一番街', note: '⛩️ 必逛：冰川神社、時之鐘、菓子屋橫丁。' },
@@ -313,11 +317,7 @@
             { id: 703, day: 7, time: '13:20', title: '成田起飛 (CI0103)', location: '成田機場 T2', note: '✈️ 平安回家！' }
         ];
 
-        const defaultExpenses = [
-            { id: 1, title: 'Skyliner 來回', amount: 5000, payer: '我' },
-            { id: 2, title: 'Day 1 鳥貴族', amount: 8000, payer: '旅伴A' },
-            { id: 3, title: '狐狸村門票', amount: 1500, payer: '我' }
-        ];
+        const defaultExpenses = [];
 
         const defaultGuides = [
             {
@@ -346,7 +346,18 @@
             }
         ];
         
-        const defaultUsers = ['我', '旅伴A', '旅伴B'];
+        const defaultUsers = ['NINA'];
+
+        // --- Toast Notification Component ---
+        const Toast = ({ message, visible }) => {
+            if (!visible) return null;
+            return (
+                <div className="fixed bottom-24 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white px-4 py-2 rounded-full shadow-lg z-[100] flex items-center gap-2 text-sm font-bold toast-enter">
+                    <Icon name="Check" size={16} className="text-jp-green" />
+                    {message}
+                </div>
+            );
+        };
 
         // --- Components ---
 
@@ -488,7 +499,7 @@
             );
         };
 
-        const ItineraryView = ({ items, setItems }) => {
+        const ItineraryView = ({ items, setItems, showToast }) => {
             const [selectedDay, setSelectedDay] = useState(1);
             const [isAdding, setIsAdding] = useState(false);
             const [editingItem, setEditingItem] = useState(null);
@@ -509,6 +520,7 @@
 
             const handleDelete = (id) => {
                 setItems(items.filter(i => i.id !== id));
+                showToast("行程已刪除");
             };
 
             const handleAdd = () => {
@@ -516,12 +528,14 @@
                 setItems([...items, { ...newItem, id: Date.now(), day: selectedDay }]);
                 setIsAdding(false);
                 setNewItem({ time: '', title: '', location: '', note: '' });
+                showToast("行程已新增");
             };
 
             const handleUpdate = () => {
                 if (!editingItem.title || !editingItem.time) return;
                 setItems(items.map(i => i.id === editingItem.id ? editingItem : i));
                 setEditingItem(null);
+                showToast("行程已更新");
             };
 
             return (
@@ -620,7 +634,7 @@
             );
         };
 
-        const GuideView = ({ guides, setGuides }) => {
+        const GuideView = ({ guides, setGuides, showToast }) => {
             const [isAdding, setIsAdding] = useState(false);
             const [newGuide, setNewGuide] = useState({ title: '', content: '', type: 'transport' });
 
@@ -636,11 +650,13 @@
                 setGuides([...guides, { ...newGuide, id: Date.now() }]);
                 setIsAdding(false);
                 setNewGuide({ title: '', content: '', type: 'transport' });
+                showToast("攻略已新增");
             };
 
             const handleDelete = (id) => {
                 if(confirm('確定刪除此攻略？')) {
                     setGuides(guides.filter(g => g.id !== id));
+                    showToast("攻略已刪除");
                 }
             };
 
@@ -712,7 +728,7 @@
             );
         }
 
-        const ExpenseView = ({ expenses, setExpenses, users, setUsers }) => {
+        const ExpenseView = ({ expenses, setExpenses, users, setUsers, showToast }) => {
             const [newExp, setNewExp] = useState({ title: '', amount: '', payer: '' });
             const [isAddingUser, setIsAddingUser] = useState(false);
             const [newUserName, setNewUserName] = useState('');
@@ -762,6 +778,7 @@
                     setUsers([...users, newUserName.trim()]);
                     setNewUserName('');
                     setIsAddingUser(false);
+                    showToast("成員已新增");
                 }
             };
 
@@ -774,6 +791,7 @@
                 if (userToDelete) {
                     setUsers(users.filter(user => user !== userToDelete));
                     setUserToDelete(null);
+                    showToast("成員已移除");
                 }
             };
 
@@ -781,14 +799,24 @@
                 if (!newExp.title || !newExp.amount) return;
                 setExpenses([...expenses, { ...newExp, id: Date.now(), amount: parseFloat(newExp.amount) }]);
                 setNewExp({ title: '', amount: '', payer: users[0] || '' });
+                showToast("款項已記錄");
             };
 
             const confirmDeleteExpense = () => {
                 if(deleteConfirmation) {
                     setExpenses(expenses.filter(e => e.id !== deleteConfirmation));
                     setDeleteConfirmation(null);
+                    showToast("款項已刪除");
                 }
             };
+
+            const handleResetData = () => {
+                if(confirm("確定重置所有分帳資料？(無法復原)")) {
+                    setExpenses([]);
+                    setUsers(defaultUsers);
+                    showToast("資料已重置");
+                }
+            }
 
             return (
                 <div className="p-5 h-full relative z-10 animate-fade-in scroll-container page-enter">
@@ -861,7 +889,7 @@
                         </div>
                     </div>
 
-                    <div className="space-y-4 pb-24 relative z-10">
+                    <div className="space-y-4 pb-12 relative z-10">
                         {expenses.slice().reverse().map((exp, idx) => (
                             <div key={exp.id} className="bg-white/95 p-4 rounded-3xl shadow-sm flex justify-between items-center border-l-4 border-jp-yellow stagger-item" style={{ animationDelay: `${idx * 0.05}s` }}>
                                 <div>
@@ -874,6 +902,10 @@
                                 </div>
                             </div>
                         ))}
+                    </div>
+                    
+                    <div className="pb-24 text-center">
+                        <button onClick={handleResetData} className="text-xs text-gray-400 underline p-4">重置所有資料</button>
                     </div>
 
                     {/* Delete Expense Modal */}
@@ -950,18 +982,25 @@
 
         const App = () => {
             const [activeTab, setActiveTab] = useState('itinerary');
-            const [itineraryItems, setItineraryItems] = useStickyState(defaultItinerary, 'jp_trip_2025_final_v7');
-            const [expenses, setExpenses] = useStickyState(defaultExpenses, 'jp_trip_2025_expenses_final_v7');
-            const [users, setUsers] = useStickyState(defaultUsers, 'jp_trip_2025_users_final_v7');
-            const [guides, setGuides] = useStickyState(defaultGuides, 'jp_trip_2025_guides_v7');
+            // Fixed keys to ensure persistence across sessions and code updates
+            const [itineraryItems, setItineraryItems] = useStickyState(defaultItinerary, 'jp_trip_2025_data_itinerary');
+            const [expenses, setExpenses] = useStickyState(defaultExpenses, 'jp_trip_2025_data_expenses');
+            const [users, setUsers] = useStickyState(defaultUsers, 'jp_trip_2025_data_users');
+            const [guides, setGuides] = useStickyState(defaultGuides, 'jp_trip_2025_data_guides');
+            const [toast, setToast] = useState({ msg: '', visible: false });
+
+            const showToast = (msg) => {
+                setToast({ msg, visible: true });
+                setTimeout(() => setToast({ msg: '', visible: false }), 2000);
+            };
 
             const renderContent = () => {
                 switch(activeTab) {
-                    case 'itinerary': return <ItineraryView items={itineraryItems} setItems={setItineraryItems} />;
-                    case 'guide': return <GuideView guides={guides} setGuides={setGuides} />;
-                    case 'expenses': return <ExpenseView expenses={expenses} setExpenses={setExpenses} users={users} setUsers={setUsers} />;
+                    case 'itinerary': return <ItineraryView items={itineraryItems} setItems={setItineraryItems} showToast={showToast} />;
+                    case 'guide': return <GuideView guides={guides} setGuides={setGuides} showToast={showToast} />;
+                    case 'expenses': return <ExpenseView expenses={expenses} setExpenses={setExpenses} users={users} setUsers={setUsers} showToast={showToast} />;
                     case 'map': return <MapView items={itineraryItems} />;
-                    default: return <ItineraryView items={itineraryItems} setItems={setItineraryItems} />;
+                    default: return <ItineraryView items={itineraryItems} setItems={setItineraryItems} showToast={showToast} />;
                 }
             };
 
@@ -972,6 +1011,7 @@
                         {renderContent()}
                     </div>
                     <TabBar activeTab={activeTab} setActiveTab={setActiveTab} />
+                    <Toast message={toast.msg} visible={toast.visible} />
                 </div>
             );
         };
