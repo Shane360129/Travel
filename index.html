@@ -32,30 +32,38 @@
             --safe-bottom: env(safe-area-inset-bottom);
         }
 
-        body {
+        /* 針對 iOS Safari 的終極修正 */
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden; /* 禁止外層滾動 */
+            position: fixed; /* 強制鎖定，防止橡皮筋效果 */
             font-family: 'Zen Maru Gothic', 'Noto Sans TC', sans-serif;
             background-color: var(--jp-bg);
             color: var(--jp-text);
             -webkit-tap-highlight-color: transparent;
-            margin: 0;
-            padding: 0;
             background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.04'/%3E%3C/svg%3E");
         }
 
         #root {
-            height: 100dvh; 
             width: 100%;
-            display: flex;
-            flex-direction: column;
+            height: 100%;
+            position: relative;
             overflow: hidden;
         }
 
+        /* 絕對定位的捲動容器，確保在 iOS 上能正確滑動 */
         .scroll-container {
-            flex: 1;
-            overflow-y: auto;
-            -webkit-overflow-scrolling: touch;
-            padding-bottom: calc(90px + var(--safe-bottom));
-            position: relative;
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0; /* 佔滿全螢幕 */
+            overflow-y: scroll; /* 強制開啟捲軸 */
+            -webkit-overflow-scrolling: touch; /* 啟用 iOS 慣性捲動 */
+            padding-bottom: calc(100px + var(--safe-bottom)); /* 預留底部空間給導航欄 */
             z-index: 10;
         }
 
@@ -68,6 +76,11 @@
             -webkit-backdrop-filter: blur(16px);
             border-top: 1px solid rgba(255, 255, 255, 0.5);
             box-shadow: 0 -4px 20px rgba(0,0,0,0.03);
+            position: absolute; /* 確保浮在最上層 */
+            bottom: 0;
+            left: 0;
+            right: 0;
+            z-index: 50;
         }
 
         .sticky-note {
@@ -282,7 +295,7 @@
             };
 
             return (
-                <div className="flex flex-col h-full relative animate-fade-in w-full">
+                <div className="flex flex-col h-full w-full">
                     <ParticleBackground type={isSnowDay ? 'snow' : 'sakura'} />
                     
                     <div className="scroll-container p-5">
@@ -310,8 +323,8 @@
 
                     {/* Add Modal */}
                     {isAdding && (
-                        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
-                            <div className="bg-white w-full sm:w-80 rounded-t-2xl sm:rounded-2xl p-6 shadow-2xl animate-modal pb-safe-bottom">
+                        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 animate-modal" style={{zIndex: 100}}>
+                            <div className="bg-white w-full sm:w-80 rounded-t-2xl sm:rounded-2xl p-6 shadow-2xl pb-safe-bottom">
                                 <h3 className="text-lg font-bold mb-4 text-jp-green">新增行程</h3>
                                 <div className="space-y-4">
                                     {/* step="600" for 10 minutes interval */}
@@ -330,8 +343,8 @@
 
                     {/* Edit Modal */}
                     {editingItem && (
-                        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
-                            <div className="bg-white w-full sm:w-80 rounded-t-2xl sm:rounded-2xl p-6 shadow-2xl animate-modal pb-safe-bottom">
+                        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 animate-modal" style={{zIndex: 100}}>
+                            <div className="bg-white w-full sm:w-80 rounded-t-2xl sm:rounded-2xl p-6 shadow-2xl pb-safe-bottom">
                                 <h3 className="text-lg font-bold mb-4 text-jp-green">編輯行程</h3>
                                 <div className="space-y-4">
                                     {/* step="600" for 10 minutes interval */}
@@ -361,6 +374,45 @@
                     setNewExp(prev => ({ ...prev, payer: users[0] }));
                 }
             }, [users]);
+
+            // --- 重新實作分帳核心演算法 ---
+            const debtSummary = useMemo(() => {
+                let balances = {};
+                users.forEach(u => balances[u] = 0);
+                let totalSpent = 0;
+                
+                expenses.forEach(e => {
+                    const payer = users.includes(e.payer) ? e.payer : users[0];
+                    if (!payer) return;
+                    const cost = parseFloat(e.amount);
+                    totalSpent += cost;
+                    balances[payer] += cost;
+                    const splitAmount = cost / users.length;
+                    users.forEach(u => balances[u] -= splitAmount);
+                });
+
+                const debts = [];
+                const debtors = users.filter(u => balances[u] < -1);
+                const creditors = users.filter(u => balances[u] > 1);
+
+                debtors.sort((a, b) => balances[a] - balances[b]);
+                creditors.sort((a, b) => balances[b] - balances[a]);
+
+                let i = 0, j = 0;
+                while (i < debtors.length && j < creditors.length) {
+                    let debtor = debtors[i];
+                    let creditor = creditors[j];
+                    let amount = Math.min(Math.abs(balances[debtor]), balances[creditor]);
+                    if (amount > 0) {
+                        debts.push({ from: debtor, to: creditor, amount: Math.round(amount) });
+                    }
+                    balances[debtor] += amount;
+                    balances[creditor] -= amount;
+                    if (Math.abs(balances[debtor]) < 1) i++;
+                    if (balances[creditor] < 1) j++;
+                }
+                return { debts, totalSpent };
+            }, [expenses, users]);
 
             const handleAddUser = () => {
                 if (newUserName.trim() && !users.includes(newUserName.trim())) {
@@ -410,6 +462,34 @@
                                 <button onClick={() => setIsAddingUser(true)} className="px-3 py-1.5 rounded-full text-sm bg-white border border-dashed border-gray-300 text-gray-500 hover:border-jp-yellow hover:text-jp-yellow transition-all flex items-center"><Icon name="Plus" size={14} className="mr-1"/></button>
                             )}
                         </div>
+                    </div>
+
+                    {/* 結算卡片 */}
+                    <div className="bg-white p-5 rounded-2xl shadow-lg mb-8 relative overflow-hidden border border-gray-100">
+                        <div className="flex justify-between items-end mb-4 relative z-10">
+                            <h2 className="text-sm text-gray-400 uppercase tracking-wider font-bold">總支出</h2>
+                             <span className="text-2xl font-bold font-mono text-gold">¥{debtSummary.totalSpent.toLocaleString()}</span>
+                        </div>
+                        
+                        <div className="h-px bg-gray-100 w-full mb-4"></div>
+
+                        <h2 className="text-xs text-jp-yellow mb-3 uppercase tracking-wider font-bold">建議還款</h2>
+                        {debtSummary.debts.length === 0 ? (
+                            <div className="text-center py-2 text-gray-400 text-sm">目前帳目平衡，友誼長存 ✨</div>
+                        ) : (
+                            <div className="space-y-3 relative z-10">
+                                {debtSummary.debts.map((d, idx) => (
+                                    <div key={idx} className="flex justify-between items-center border-b border-gray-50 pb-2 last:border-0">
+                                        <div className="flex items-center gap-2">
+                                            <span className="bg-gray-100 px-2 py-1 rounded text-xs text-gray-600">{d.from}</span>
+                                            <span className="text-[10px] text-gray-400">➜</span>
+                                            <span className="bg-jp-yellow text-white px-2 py-1 rounded text-xs font-bold">{d.to}</span>
+                                        </div>
+                                        <span className="font-mono text-lg font-bold text-gray-700">¥{d.amount.toLocaleString()}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
                     </div>
 
                     {/* 新增支出區塊 */}
@@ -486,9 +566,9 @@
 
         const App = () => {
             const [activeTab, setActiveTab] = useState('itinerary');
-            const [itineraryItems, setItineraryItems] = useStickyState(defaultItinerary, 'jp_trip_2025_v4');
-            const [expenses, setExpenses] = useStickyState(defaultExpenses, 'jp_trip_2025_expenses');
-            const [users, setUsers] = useStickyState(defaultUsers, 'jp_trip_2025_users');
+            const [itineraryItems, setItineraryItems] = useStickyState(defaultItinerary, 'jp_trip_2025_final');
+            const [expenses, setExpenses] = useStickyState(defaultExpenses, 'jp_trip_2025_expenses_final');
+            const [users, setUsers] = useStickyState(defaultUsers, 'jp_trip_2025_users_final');
 
             const renderContent = () => {
                 switch(activeTab) {
